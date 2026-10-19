@@ -7,6 +7,7 @@
 
 const OUTLINE = "#3a2e2a";
 const PINK = "#ff9fb4";
+const BLUSH = "rgba(255, 105, 170, 0.42)";
 
 export const CATS = ["Ginger", "Tuxedo", "Siamese", "Grey Tabby", "Calico", "Black Cat"];
 
@@ -92,6 +93,12 @@ function whiskers(ctx, y, color = OUTLINE) {
   ctx.strokeStyle = color; ctx.lineWidth = 1.4; ctx.lineCap = "round"; ctx.stroke();
 }
 
+// Rosy cheeks — every cat gets them.
+function blush(ctx, y, dx = 24) {
+  ellipse(ctx, 50 - dx, y, 6.5, 4); shape(ctx, BLUSH, null);
+  ellipse(ctx, 50 + dx, y, 6.5, 4); shape(ctx, BLUSH, null);
+}
+
 function stripes(ctx, lines, color, width = 4) {
   ctx.beginPath();
   for (const [x1, y1, x2, y2] of lines) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
@@ -108,6 +115,7 @@ const DRAW_CAT = [
     ellipse(ctx, 43, 70, 9, 7); shape(ctx, "#ffe2c2", null);
     ellipse(ctx, 57, 70, 9, 7); shape(ctx, "#ffe2c2", null);
     eyes(ctx, 52, 14, "#7cc84d");
+    blush(ctx, 64);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 70);
   },
   // 1 — Tuxedo: wide black head, white blaze + muzzle, red bow tie below the chin.
@@ -117,10 +125,11 @@ const DRAW_CAT = [
     tri(ctx, 50, 30, 41, 62, 59, 62); shape(ctx, "#fff", null);
     ellipse(ctx, 50, 69, 18, 13); shape(ctx, "#fff", null);
     eyes(ctx, 51, 16, "#c9e34b");
+    blush(ctx, 66, 20);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 70, "#8a8a99");
-    tri(ctx, 34, 81, 34, 97, 50, 89); shape(ctx, "#e8394d");
-    tri(ctx, 66, 81, 66, 97, 50, 89); shape(ctx, "#e8394d");
-    ellipse(ctx, 50, 89, 4.5, 4.5); shape(ctx, "#c4213a", OUTLINE, 2);
+    tri(ctx, 34, 81, 34, 97, 50, 89); shape(ctx, "#ff5fa2");
+    tri(ctx, 66, 81, 66, 97, 50, 89); shape(ctx, "#ff5fa2");
+    ellipse(ctx, 50, 89, 4.5, 4.5); shape(ctx, "#e0337f", OUTLINE, 2);
   },
   // 2 — Siamese: wedge head, huge dark ears, chocolate mask, blue almond eyes.
   (ctx) => {
@@ -134,6 +143,7 @@ const DRAW_CAT = [
     shape(ctx, "#f4e6cc");
     ellipse(ctx, 50, 68, 17, 19); shape(ctx, "#8a6450", null);
     eyes(ctx, 50, 16, "#4fa8ff", { rx: 8, ry: 5.5, tilt: 0.25 });
+    blush(ctx, 62, 25);
     nose(ctx, 62, "#3a2620"); mouth(ctx, 66, "#2a1a14"); whiskers(ctx, 72, "#f4e6cc");
   },
   // 3 — Grey Tabby: wide squarish head, small round ears, "M" brow, amber eyes.
@@ -147,6 +157,7 @@ const DRAW_CAT = [
     ellipse(ctx, 42, 70, 10, 8); shape(ctx, "#f2f4f7", null);
     ellipse(ctx, 58, 70, 10, 8); shape(ctx, "#f2f4f7", null);
     eyes(ctx, 52, 17, "#ffb12e");
+    blush(ctx, 63, 28);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 71);
   },
   // 4 — Calico: white round head, orange + black patches, one folded ear.
@@ -164,6 +175,7 @@ const DRAW_CAT = [
     ctx.restore();
     ellipse(ctx, 50, 57, 36, 34); shape(ctx, "transparent");
     eyes(ctx, 52, 15, "#5cb85c");
+    blush(ctx, 64);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 71);
   },
   // 5 — Black Cat: curled tail, tall tufted ears, big yellow slit eyes.
@@ -178,6 +190,7 @@ const DRAW_CAT = [
     stripes(ctx, [[17, 6, 13, 0], [83, 6, 87, 0]], "#34304a", 3);
     ellipse(ctx, 50, 58, 35, 32); shape(ctx, "#34304a");
     eyes(ctx, 54, 15, "#ffd23f", { rx: 10, ry: 11, slit: true });
+    blush(ctx, 68, 26);
     nose(ctx, 66, "#ff8fb0"); mouth(ctx, 69, "#a99cc7"); whiskers(ctx, 72, "#a99cc7");
   },
 ];
@@ -256,7 +269,7 @@ export class Renderer {
       const c = document.createElement("canvas");
       c.width = c.height = px;
       const g = c.getContext("2d");
-      g.shadowColor = "rgba(58, 46, 42, 0.28)";
+      g.shadowColor = "rgba(122, 58, 98, 0.28)";
       g.shadowBlur = px * 0.05;
       g.shadowOffsetY = px * 0.03;
       drawCat(g, color, px / 2, px / 2, px * 0.86);
@@ -271,9 +284,9 @@ export class Renderer {
     bg.width = this.canvas.width; bg.height = this.canvas.height;
     const g = bg.getContext("2d");
     g.scale(this.dpr, this.dpr);
-    g.shadowColor = "rgba(180, 90, 50, 0.25)";
-    g.shadowBlur = 14;
-    g.fillStyle = "rgba(255, 255, 255, 0.55)";
+    g.shadowColor = "rgba(240, 71, 143, 0.3)";
+    g.shadowBlur = 16;
+    g.fillStyle = "rgba(255, 255, 255, 0.7)";
     for (let r = 0; r < rows; r++)
       for (let c = 0; c < cols; c++) {
         if (!mask[r][c]) continue;
@@ -286,7 +299,7 @@ export class Renderer {
       for (let c = 0; c < cols; c++) {
         if (!mask[r][c]) continue;
         const x = this.ox + c * ts, y = this.oy + r * ts;
-        g.fillStyle = (r + c) % 2 ? "#ffe9d9" : "#fff6ee";
+        g.fillStyle = (r + c) % 2 ? "#ffe0ee" : "#fff4f9";
         g.beginPath(); g.roundRect(x + 1, y + 1, ts - 2, ts - 2, ts * 0.16); g.fill();
         this.cellClip.rect(x, y, ts, ts);
       }
@@ -396,7 +409,7 @@ export class Renderer {
       const { r, c } = this.selected;
       const x = this.ox + c * ts, y = this.oy + r * ts;
       const glow = 0.55 + 0.25 * Math.sin(now / 160);
-      ctx.fillStyle = `rgba(255, 138, 92, ${glow})`;
+      ctx.fillStyle = `rgba(255, 95, 162, ${glow})`;
       ctx.beginPath(); ctx.roundRect(x + 1, y + 1, ts - 2, ts - 2, ts * 0.16); ctx.fill();
     }
 

@@ -11,9 +11,10 @@ import { attachInput } from "./input.js";
 import { loadProgress, saveProgress } from "./storage.js";
 import { createUI } from "./ui.js";
 
-// Skip the service worker on localhost so development always loads fresh modules.
+// Skip the service worker on localhost so development always loads fresh modules
+// (add ?sw to the URL to test offline mode locally).
 const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
-if ("serviceWorker" in navigator && !isLocal) {
+if ("serviceWorker" in navigator && (!isLocal || new URLSearchParams(location.search).has("sw"))) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch((err) => {
       console.warn("Service worker registration failed:", err);

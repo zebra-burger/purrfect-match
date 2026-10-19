@@ -13,7 +13,10 @@ Once deployed, the game lives at **https://zebra-burger.github.io/purrfect-match
 
 1. Open the link above in **Chrome**
 2. Tap the **⋮** menu → **Add to Home Screen** (or tap the install banner)
-3. It now launches fullscreen from its own icon, works offline, and saves progress on the phone
+3. It now launches fullscreen from its own icon, works fully offline (levels are generated on the
+   phone, so there's nothing to download), and saves progress on the phone
+
+Open it online once after each update and the new version is picked up automatically.
 
 ## Development
 
@@ -24,6 +27,7 @@ python3 -m http.server 8000
 ```
 
 Then visit `http://localhost:8000`. Add `?level=N` to jump straight to level N.
+The service worker is skipped on localhost; add `?sw` to test offline mode locally.
 
 Tests and difficulty calibration use plain Node (no install):
 

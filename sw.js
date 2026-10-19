@@ -1,18 +1,34 @@
 // Service worker: caches the whole game for offline play.
 // Bump CACHE_VERSION on every release so installed phones pick up updates.
-const CACHE_VERSION = "purrfect-v0.2.0";
+const CACHE_VERSION = "purrfect-v0.3.0";
 
+// Everything the game needs to boot and play with no network. Levels are generated
+// on the phone, so there is no level data to fetch — once this is cached, it's endless offline.
 const ASSETS = [
-  ".",
+  "./",
   "index.html",
   "manifest.webmanifest",
   "styles/main.css",
+  "assets/fonts/fredoka-latin.woff2",
+  "assets/icons/icon-192.png",
+  "assets/icons/icon-512.png",
+  "assets/icons/icon-maskable.png",
   "src/main.js",
+  "src/board.js",
+  "src/generator.js",
+  "src/rng.js",
+  "src/renderer.js",
+  "src/input.js",
+  "src/storage.js",
+  "src/ui.js",
+  "src/audio.js",
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION)
+      .then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -24,21 +40,27 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Network-first for navigation (so updates land), cache-first for everything else.
+// Pages: network-first so a new release shows up as soon as she's online,
+// falling back to the cached game when she isn't (ignoring ?level= style queries).
+// Everything else: cache-first — the cache is replaced wholesale on each version bump.
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode === "navigate") {
+  const { request } = event;
+  if (request.method !== "GET" || new URL(request.url).origin !== location.origin) return;
+
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
+      fetch(request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy));
+          caches.open(CACHE_VERSION).then((cache) => cache.put("index.html", copy));
           return res;
         })
         .catch(() => caches.match("index.html"))
     );
     return;
   }
+
   event.respondWith(
-    caches.match(event.request).then((hit) => hit || fetch(event.request))
+    caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request))
   );
 });
