@@ -60,7 +60,20 @@ function mirror(pts) {
   return pts.map((v, i) => (i % 2 === 0 ? 100 - v : v));
 }
 
+// Set while drawing a sleeping cat: eyes() draws closed, contented curves instead.
+let dozing = false;
+
 function eyes(ctx, y, dx, iris, { rx = 7, ry = 8, slit = false, tilt = 0 } = {}) {
+  if (dozing) {
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const x = 50 + side * dx;
+      ctx.moveTo(x - rx, y - 1);
+      ctx.quadraticCurveTo(x, y + ry * 0.75, x + rx, y - 1);
+    }
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.stroke();
+    return;
+  }
   for (const side of [-1, 1]) {
     const x = 50 + side * dx;
     ellipse(ctx, x, y, rx, ry, side * tilt); shape(ctx, iris, OUTLINE, 2);
@@ -367,6 +380,33 @@ function drawBox(g, layers, px) {
   g.restore();
 }
 
+// Sleeping cat: the same cat with its eyes shut, a little hazy, with a "z" bubble.
+// It wakes (and turns back into the plain cat) when she matches right next to it.
+function drawSleepy(g, color, px) {
+  dozing = true;
+  try { drawCat(g, color, px * 0.47, px * 0.55, px * 0.8); } finally { dozing = false; }
+  g.save();
+  g.scale(px / 100, px / 100);
+  g.shadowColor = "transparent";
+  // dreamy lilac haze over the cat
+  g.globalCompositeOperation = "source-atop";
+  g.fillStyle = "rgba(200, 162, 255, 0.28)";
+  g.fillRect(0, 0, 100, 100);
+  g.globalCompositeOperation = "source-over";
+  // thought bubble with a "z"
+  g.lineWidth = 2.5;
+  g.strokeStyle = "#9b6ae6";
+  g.fillStyle = "#fff";
+  g.beginPath(); g.arc(78, 34, 3.5, 0, 7); g.fill(); g.stroke();
+  g.beginPath(); g.ellipse(84, 18, 14, 12, 0, 0, 7); g.fill(); g.stroke();
+  g.fillStyle = "#9b6ae6";
+  g.font = "700 19px Fredoka, system-ui, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText("z", 84, 18);
+  g.restore();
+}
+
 // Fish treat: a salmon-pink fish cookie with icing, ready to drop to the bottom.
 function drawFish(g, px) {
   g.save();
@@ -520,7 +560,9 @@ export class Renderer {
 
   // Rasterized special cat (built lazily: most boards only ever see a few).
   specialImage(tile) {
-    const key = tile.special === "disco" || tile.special === "fish" ? tile.special : `${tile.special}:${tile.color}:${tile.dir || ""}`;
+    const key = tile.special === "disco" || tile.special === "fish" ? tile.special
+      : tile.special === "sleepy" ? `sleepy:${tile.sleepColor}`
+      : `${tile.special}:${tile.color}:${tile.dir || ""}`;
     let img = this.specialCache.get(key);
     if (!img) {
       const px = Math.round(this.ts * this.dpr);
@@ -533,6 +575,7 @@ export class Renderer {
       if (tile.special === "zoomie") drawZoomie(g, tile.color, px, tile.dir);
       else if (tile.special === "boom") drawBoom(g, tile.color, px);
       else if (tile.special === "fish") drawFish(g, px);
+      else if (tile.special === "sleepy") drawSleepy(g, tile.sleepColor, px);
       else drawDisco(g, px);
       this.specialCache.set(key, img);
     }
@@ -679,8 +722,17 @@ export class Renderer {
   }
 
   // Yarn unpicked and boxes knocked: puffs of wool and cardboard, a wobble on the box.
-  animateGoals({ yarnHits = [], boxHits = [] }) {
+  // Sleeping cats waking up: a stretch (squash and pop) and a puff of hearts.
+  animateGoals({ yarnHits = [], boxHits = [], wakes = [] }) {
     const now = performance.now();
+    for (const { r, c, tile } of wakes) {
+      for (let i = 0; i < 8; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.spawn(c + 0.5, r + 0.3, Math.cos(a) * 2.2, Math.sin(a) * 2.2 - 1.8, "heart", 0.9, ["#c8a2ff", "#ff8fc0", "#fff"]);
+      }
+      const s = this.sprites.get(tile.id);
+      if (s) this.animate(360, (t) => { s.scale = 1 + 0.3 * Math.sin(Math.PI * t); }, ease.linear);
+    }
     for (const { r, c, left } of yarnHits) {
       for (let i = 0; i < (left ? 3 : 6); i++) {
         const a = Math.random() * Math.PI * 2;
@@ -843,6 +895,7 @@ export class Renderer {
       const img = special ? this.specialImage(s.tile) : this.catCache[s.tile.color];
       const cx = this.ox + (s.x + 0.5) * ts, cy = this.oy + (s.y + 0.5) * ts;
       if (special === "fish") rot += 0.1 * Math.sin(now / 300 + s.x);
+      else if (special === "sleepy") scale *= 1 + 0.035 * Math.sin(now / 700 + s.x * 1.7 + s.y);
       else if (special) {
         // Specials breathe and glow so they read at a glance.
         scale *= 1 + 0.04 * Math.sin(now / 180 + s.x + s.y);

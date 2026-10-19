@@ -2,13 +2,14 @@
 //
 // generateLevel(n) -> {
 //   seed: n,
-//   objective:  "score" | "yarn" | "fish" | "boxes" | "mixed",
+//   objective:  "score" | "yarn" | "fish" | "boxes" | "cats" | "mixed",
 //   boardShape: 2D mask (which cells exist),
 //   moves:      move budget from the difficulty curve,
 //   colors:     how many cat colors are in play (5 at first, 6 later),
-//   blockers:   { yarn, boxes: 2D layer counts or null, fish: [{r, c}], fishTotal },
-//   targets:    what wins the level: { score } or any of { yarn, boxes, fish }
-//               (total yarn layers / box layers / fish treats to collect),
+//   blockers:   { yarn, boxes: 2D layer counts or null, fish: [{r, c}], fishTotal,
+//                 sleepy: [{r, c}] sleeping cats },
+//   targets:    what wins the level: { score } or any of { yarn, boxes, fish, cats }
+//               (total yarn layers / box layers / fish treats to collect / cats to wake),
 // }
 // plus, so a level is fully reproducible:
 //   shapeName:  which board shape was picked,
@@ -87,8 +88,8 @@ function chooseShape(n, rng) {
 
 // Each goal is introduced on its own level first, then joins the rotation. Score-only
 // levels draw nothing else from the RNG, so their boards are the same as before goals.
-const INTRO = { 5: "yarn", 7: "fish", 9: "boxes", 15: "mixed" };
-const WEIGHTS = { score: 0.2, yarn: 0.3, fish: 0.2, boxes: 0.2, mixed: 0.1 };
+const INTRO = { 5: "yarn", 7: "fish", 9: "boxes", 11: "cats", 15: "mixed" };
+const WEIGHTS = { score: 0.2, yarn: 0.3, fish: 0.2, boxes: 0.2, cats: 0.2, mixed: 0.1 };
 
 function chooseObjective(n, rng) {
   const roll = rng();
@@ -123,9 +124,10 @@ const layerGrid = (mask) => mask.map((row) => row.map(() => 0));
 const sum2d = (g) => g.flat().reduce((a, b) => a + b, 0);
 
 // Amounts scale with difficulty; tuned against the bot in tests/sim.mjs.
+const SLEEPY_BASE = 0.12, SLEEPY_SLOPE = 0.10, SLEEPY_MOVES = 0.65;
 function placeBlockers(objective, mask, d, rng) {
   const cells = mask.flat().filter(Boolean).length;
-  const out = { yarn: null, boxes: null, fish: [], fishTotal: 0 };
+  const out = { yarn: null, boxes: null, fish: [], fishTotal: 0, sleepy: [] };
   const parts = objective === "mixed" ? (rng() < 0.5 ? ["yarn", "fish"] : ["boxes", "yarn"]) : [objective];
   const share = parts.length > 1 ? 0.45 : 1;
 
@@ -143,6 +145,12 @@ function placeBlockers(objective, mask, d, rng) {
     for (const { r, c } of mirroredCells(mask, count, rng, free)) {
       out.yarn[r][c] = rng() < Math.max(0, d - 0.5) * 0.4 ? 2 : 1;
     }
+  }
+  if (parts.includes("cats")) {
+    // Sleeping cats curl up in the top two thirds, so there's room below to match next to them.
+    const count = Math.max(4, Math.round(cells * (SLEEPY_BASE + SLEEPY_SLOPE * d) * share));
+    const free = (r, c) => r < mask.length - 2 && (!out.boxes || !out.boxes[r][c]);
+    out.sleepy = mirroredCells(mask, count, rng, free);
   }
   if (parts.includes("fish")) {
     out.fishTotal = Math.max(2, Math.round((3 + 2.2 * d) * (parts.length > 1 ? 0.6 : 1)));
@@ -172,7 +180,8 @@ export function generateLevel(n) {
   const colors = n <= 12 || (d < 0.15 && rng() < 0.5) ? 5 : 6;
 
   const cellCount = boardShape.flat().filter(Boolean).length;
-  const moves = Math.round(30 - 12 * d);
+  // Sleeping cats wake easily, so those levels get a tighter budget instead of a crowded board.
+  const moves = Math.round((30 - 12 * d) * (objective === "cats" ? SLEEPY_MOVES : 1));
   // Points per move a greedy bot averages (tests/sim.mjs): 5 colors cascade far more
   // than 6, and holes/narrow shapes cascade less. The target asks for ~75% of that on
   // a gentle level and ~110% on a spike.
@@ -180,12 +189,13 @@ export function generateLevel(n) {
   const warmUp = n <= 10 ? 0.55 + 0.045 * (n - 1) : 1; // first ten levels go easy
   const score = Math.max(1000, Math.round((moves * perMove * (0.75 + 0.35 * d) * warmUp) / 100) * 100);
 
-  const blockers = objective === "score" ? { yarn: null, boxes: null, fish: [], fishTotal: 0 }
+  const blockers = objective === "score" ? { yarn: null, boxes: null, fish: [], fishTotal: 0, sleepy: [] }
     : placeBlockers(objective, boardShape, d, rng);
   const targets = objective === "score" ? { score } : {};
   if (blockers.yarn) targets.yarn = sum2d(blockers.yarn);
   if (blockers.boxes) targets.boxes = sum2d(blockers.boxes);
   if (blockers.fishTotal) targets.fish = blockers.fishTotal;
+  if (blockers.sleepy.length) targets.cats = blockers.sleepy.length;
   const fillMask = blockers.boxes ? boardShape.map((row, r) => row.map((v, c) => v && !blockers.boxes[r][c])) : boardShape;
 
   // Solvability pass: regenerate the opening fill until it has a legal move.

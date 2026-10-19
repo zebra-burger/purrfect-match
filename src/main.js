@@ -152,9 +152,11 @@ function goalText({ objective, targets }) {
   if (targets.yarn) parts.push(`Untangle the yarn ${GOAL_ICONS.yarn}`);
   if (targets.boxes) parts.push(`Open the boxes ${GOAL_ICONS.boxes}`);
   if (targets.fish) parts.push(`Drop ${targets.fish} fish ${GOAL_ICONS.fish}`);
+  if (targets.cats) parts.push(`Wake ${targets.cats} sleepy cats ${GOAL_ICONS.cats}`);
   let tip = null;
   if (game.level <= 30) {
-    if (targets.fish) tip = "Tip: you can swipe a fish down";
+    if (targets.cats) tip = "Match right next to a sleeping cat to wake it";
+    else if (targets.fish) tip = "Tip: you can swipe a fish down";
     else if (targets.boxes) tip = "Match next to a box to open it";
   }
   return [parts.join(" + "), tip];
@@ -240,6 +242,13 @@ function armHint() {
 async function playSwap(a, b) {
   const { board } = game;
   if (game.busy || game.over || !board.get(a.r, a.c) || !board.get(b.r, b.c)) return;
+  if (board.isAsleep(a) || board.isAsleep(b)) {
+    // Sleeping cats won't budge: a sleepy wiggle, no move spent.
+    sfx.nope();
+    renderer.hint = [a, b].filter((p) => board.isAsleep(p));
+    setTimeout(() => { if (!game.busy) renderer.hint = null; }, 500);
+    return;
+  }
   game.busy = true;
   renderer.hint = null;
   clearTimeout(game.hintTimer);

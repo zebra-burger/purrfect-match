@@ -21,7 +21,8 @@ test("every level opens with a legal move, no standing match, and sane numbers",
     assert.ok(b.hasLegalMove(), `level ${n} has no opening move`);
     assert.equal(b.findMatches().length, 0, `level ${n} opens with a match`);
     assert.ok(lvl.boardShape.length <= 9 && lvl.boardShape[0].length <= 9);
-    assert.ok(lvl.moves >= 15 && lvl.moves <= 30);
+    // Sleeping-cat levels run on a tighter budget (waking is easy; the clock is the challenge).
+    assert.ok(lvl.moves >= (lvl.objective === "cats" ? 11 : 15) && lvl.moves <= 30, `level ${n} moves ${lvl.moves}`);
     if (lvl.objective === "score") assert.ok(lvl.targets.score >= 1000);
     else assert.ok(Object.values(lvl.targets).every((v) => v > 0), `level ${n} goal ${JSON.stringify(lvl.targets)}`);
     if (lvl.blockers.boxes) assert.ok(lvl.boardShape.every((row, r) => row.every((on, c) => !lvl.blockers.boxes[r][c] || on)));
@@ -32,10 +33,11 @@ test("every level opens with a legal move, no standing match, and sane numbers",
 test("every goal shows up, each introduced on its own level first", () => {
   const seen = new Set();
   for (let n = 1; n <= 300; n++) seen.add(generateLevel(n).objective);
-  assert.deepEqual([...seen].sort(), ["boxes", "fish", "mixed", "score", "yarn"]);
+  assert.deepEqual([...seen].sort(), ["boxes", "cats", "fish", "mixed", "score", "yarn"]);
   assert.equal(generateLevel(5).objective, "yarn");
   assert.equal(generateLevel(7).objective, "fish");
   assert.equal(generateLevel(9).objective, "boxes");
+  assert.equal(generateLevel(11).objective, "cats");
   for (let n = 1; n <= 4; n++) assert.equal(generateLevel(n).objective, "score");
 });
 

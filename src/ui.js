@@ -5,7 +5,7 @@
 
 const fmt = (n) => n.toLocaleString("en-US");
 
-export const GOAL_ICONS = { yarn: "🧶", boxes: "📦", fish: "🐟", score: "⭐" };
+export const GOAL_ICONS = { yarn: "🧶", boxes: "📦", fish: "🐟", cats: "😴", score: "⭐" };
 
 export function createUI({ onMap } = {}) {
   const hud = document.createElement("div");

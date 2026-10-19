@@ -44,11 +44,12 @@ export function playLevel(n, botRng = mulberry32(n * 31 + 7), target, maxMoves) 
       const look = board.clone(() => 0.99);
       const depth = fishDepth(look);
       look.swap(a, b);
-      const step = look.resolveStep([a, b]) || { points: 0, created: [], yarnHits: [], boxHits: [] };
+      const step = look.resolveStep([a, b]) || { points: 0, created: [], yarnHits: [], boxHits: [], wakes: [] };
       const made = step.created.reduce((s, c) => s + MAKE_BONUS[c.tile.special], 0);
       let goal = 0;
       if (targets.yarn) goal += 160 * step.yarnHits.length;
       if (targets.boxes) goal += 120 * step.boxHits.length;
+      if (targets.cats) goal += 200 * step.wakes.length;
       if (targets.fish) {
         if (step) look.collapse();
         goal += 220 * (fishDepth(look) - depth) + 900 * look.collectFish().length;

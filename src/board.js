@@ -26,6 +26,10 @@
 //                skip them; they fall like cats and are collected at the bottom.
 //                A fish can also be swiped down one cell (costs a move) so a treat
 //                stuck near the bottom is never hopeless
+//   sleeping cats tiles with special "sleepy" and no color (their color waits in
+//                `sleepColor`). They fall like cats but can't be swapped or matched.
+//                A match right next to one, a blast over it or a Paw Swipe wakes it:
+//                it takes its color and joins the board as a normal cat
 // Tiles fall through boxes the same way they fall through holes.
 
 let nextTileId = 1;
@@ -43,15 +47,19 @@ export const BLAST_POINTS = 30;
 export const YARN_POINTS = 40;
 export const BOX_POINTS = 60;
 export const FISH_POINTS = 500;
+export const WAKE_POINTS = 80;
 
-// Swap-firing specials (fish treats are tiles with a `special`, but they're cargo).
-const isPower = (t) => Boolean(t && t.special && t.special !== "fish");
+// Swap-firing specials (fish treats and sleeping cats have a `special`, but they're cargo).
+const CARGO = new Set(["fish", "sleepy"]);
+const isPower = (t) => Boolean(t && t.special && !CARGO.has(t.special));
+const isCargo = (t) => Boolean(t && CARGO.has(t.special));
 const zeros = (mask) => mask.map((row) => row.map(() => 0));
 
 export class Board {
   // colors: 2D array of color indices (null where the mask has no cell).
   // colorCount: how many cat colors refills draw from. rng: () => [0, 1) for refills.
-  // blockers (optional): { yarn, boxes: 2D layer counts, fish: [{r, c}], fishTotal }.
+  // blockers (optional): { yarn, boxes: 2D layer counts, fish: [{r, c}], fishTotal,
+  //   sleepy: [{r, c}] } — a sleeping cat keeps the color `colors` gives its cell.
   constructor(mask, colors, colorCount, rng, blockers = null) {
     this.rows = mask.length;
     this.cols = mask[0].length;
@@ -65,6 +73,11 @@ export class Board {
     );
     const fish = blockers?.fish || [];
     for (const { r, c } of fish) this.grid[r][c] = makeTile(null, "fish");
+    for (const { r, c } of blockers?.sleepy || []) {
+      const t = makeTile(null, "sleepy");
+      t.sleepColor = colors[r][c] ?? Math.floor(rng() * colorCount);
+      this.grid[r][c] = t;
+    }
     this.fishToSpawn = Math.max(0, (blockers?.fishTotal || 0) - fish.length);
     this.fishCollected = 0;
   }
@@ -97,6 +110,17 @@ export class Board {
     let n = 0;
     for (const row of this.boxes) for (const v of row) n += v;
     return n;
+  }
+
+  sleepyLeft() {
+    let n = 0;
+    for (const row of this.grid) for (const t of row) if (t && t.special === "sleepy") n++;
+    return n;
+  }
+
+  isAsleep(p) {
+    const t = this.get(p.r, p.c);
+    return Boolean(t && t.special === "sleepy");
   }
 
   fishOnBoard() {
@@ -227,11 +251,13 @@ export class Board {
     const blasts = [];
     const created = [];
     const boxHit = new Map();
+    const wake = new Map();
     let groups = [];
 
     const mark = (r, c) => {
       if (this.exists(r, c) && this.boxes[r][c]) { boxHit.set(key(r, c), { r, c }); return; }
       const t = this.get(r, c), k = key(r, c);
+      if (t && t.special === "sleepy") { wake.set(k, { r, c, tile: t }); return; }
       if (!t || t.special === "fish" || protect.has(k) || clear.has(k)) return;
       clear.set(k, { r, c });
       if (isPower(t) && !consumed.has(t.id)) queue.push({ r, c, tile: t });
@@ -296,7 +322,7 @@ export class Board {
       }
     } else if (poke) {
       mark(poke.r, poke.c);
-      if (!clear.size) return null;
+      if (!clear.size && !wake.size) return null;
     } else {
       groups = this.findMatches();
       if (!groups.length) return null;
@@ -314,11 +340,15 @@ export class Board {
         created.push({ r: at.r, c: at.c, tile: this.grid[at.r][at.c], special, dir });
       }
       for (const g of groups) for (const { r, c } of g.cells) mark(r, c);
-      // A match knocks a layer off every box right next to it.
+      // A match knocks a layer off every box right next to it, and wakes any sleeping cat.
       for (const g of groups)
         for (const { r, c } of g.cells)
-          for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
-            if (this.exists(r + dr, c + dc) && this.boxes[r + dr][c + dc]) boxHit.set(key(r + dr, c + dc), { r: r + dr, c: c + dc });
+          for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const rr = r + dr, cc = c + dc;
+            if (this.exists(rr, cc) && this.boxes[rr][cc]) boxHit.set(key(rr, cc), { r: rr, c: cc });
+            const t = this.get(rr, cc);
+            if (t && t.special === "sleepy") wake.set(key(rr, cc), { r: rr, c: cc, tile: t });
+          }
     }
     const matched = clear.size;
 
@@ -351,6 +381,13 @@ export class Board {
     for (const { r, c } of created)
       if (this.yarn[r][c] && !clear.has(key(r, c))) yarnHits.push({ r, c, left: --this.yarn[r][c] });
     const boxHits = [...boxHit.values()].map(({ r, c }) => ({ r, c, left: --this.boxes[r][c] }));
+    // Woken cats stay where they are (they can make a match on the next cascade step).
+    const wakes = [...wake.values()];
+    for (const { tile } of wakes) {
+      tile.color = tile.sleepColor;
+      tile.special = null;
+      delete tile.sleepColor;
+    }
     for (const cr of created) {
       cr.tile.special = cr.special;
       if (cr.dir) cr.tile.dir = cr.dir;
@@ -366,7 +403,9 @@ export class Board {
       blasts,
       yarnHits,
       boxHits,
-      points: matchPoints + BLAST_POINTS * Math.max(0, extra) + YARN_POINTS * yarnHits.length + BOX_POINTS * boxHits.length,
+      wakes,
+      points: matchPoints + BLAST_POINTS * Math.max(0, extra) + YARN_POINTS * yarnHits.length +
+        BOX_POINTS * boxHits.length + WAKE_POINTS * wakes.length,
     };
   }
 
@@ -399,15 +438,16 @@ export class Board {
   }
 
   // Swaps that fire without needing a match: a Disco Cat with anything but a fish
-  // treat, or two specials.
+  // treat or a sleeping cat, or two specials.
   isSpecialSwap(a, b) {
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
     if (!isPower(ta) && !isPower(tb)) return false;
-    if (!ta || !tb || ta.special === "fish" || tb.special === "fish") return false;
+    if (!ta || !tb || isCargo(ta) || isCargo(tb)) return false;
     return ta.special === "disco" || tb.special === "disco" || (isPower(ta) && isPower(tb));
   }
 
-  // Can a Paw Swipe take this cell? Any cat or special; not a fish treat or an empty cell.
+  // Can a Paw Swipe take this cell? Any cat or special (a sleeping cat just wakes up);
+  // not a fish treat or an empty cell.
   canPaw(r, c) {
     const t = this.get(r, c);
     return Boolean(t && t.special !== "fish");
@@ -493,12 +533,13 @@ export class Board {
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
     if (!ta || !tb || a.c !== b.c || Math.abs(a.r - b.r) !== 1) return false;
     const [up, down] = a.r < b.r ? [ta, tb] : [tb, ta];
-    return up.special === "fish" && down.special !== "fish";
+    return up.special === "fish" && !isCargo(down);
   }
 
   // Is swapping a and b a legal move: a match, a special swap, or a fish nudge?
   // Leaves the board unchanged.
   swapMakesMatch(a, b) {
+    if (this.isAsleep(a) || this.isAsleep(b)) return false; // sleeping cats stay put
     if (this.isSpecialSwap(a, b) || this.isFishNudge(a, b)) return true;
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
     if (!ta || !tb || ta.color === tb.color) return false;
@@ -553,12 +594,13 @@ export class Board {
   }
 }
 
-// Has the level been won? `targets` is the generator's { score } or { yarn, boxes, fish }.
+// Has the level been won? `targets` is the generator's { score } or { yarn, boxes, fish, cats }.
 export function goalsMet(board, targets, score) {
   if (targets.score != null && score < targets.score) return false;
   if (targets.yarn != null && board.yarnLeft() > 0) return false;
   if (targets.boxes != null && board.boxesLeft() > 0) return false;
   if (targets.fish != null && board.fishCollected < targets.fish) return false;
+  if (targets.cats != null && board.sleepyLeft() > 0) return false;
   return true;
 }
 
@@ -568,6 +610,7 @@ export function goalsLeft(board, targets) {
   if (targets.yarn != null) out.push({ kind: "yarn", left: board.yarnLeft() });
   if (targets.boxes != null) out.push({ kind: "boxes", left: board.boxesLeft() });
   if (targets.fish != null) out.push({ kind: "fish", left: Math.max(0, targets.fish - board.fishCollected) });
+  if (targets.cats != null) out.push({ kind: "cats", left: board.sleepyLeft() });
   return out;
 }
 
