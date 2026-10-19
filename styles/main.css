@@ -119,8 +119,8 @@ h1 {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: auto auto auto 1fr auto;
-  gap: 6px;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 8px;
   padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px 0;
   max-width: 560px;
   margin: 0 auto;
@@ -160,7 +160,7 @@ h1 {
 .hud-moves.low { animation: pulse 0.9s ease-in-out infinite; border-color: var(--accent); }
 
 .hud-score { align-items: stretch; text-align: center; }
-.hud-score .hud-value { font-size: clamp(0.8rem, 3.7vw, 1.05rem); white-space: nowrap; padding: 2px 0 4px; }
+.hud-score .hud-value { font-size: 1.05rem; padding: 2px 0 4px; }
 
 .hud-bar {
   height: 9px;
@@ -176,23 +176,6 @@ h1 {
   background: linear-gradient(90deg, var(--lilac), var(--accent), var(--accent-deep));
   transition: width 0.35s ease-out;
 }
-
-.hud-sound {
-  pointer-events: auto;
-  min-width: 0;
-  width: 38px;
-  justify-content: center;
-  padding: 0;
-  font: inherit;
-  color: var(--accent-deep);
-  cursor: pointer;
-}
-
-.hud-sound:active { transform: scale(0.92); }
-.hud-sound .cross { display: none; }
-.hud-sound.muted { color: #c9a3b9; }
-.hud-sound.muted .waves { display: none; }
-.hud-sound.muted .cross { display: inline; }
 
 /* ---- Dialog ---- */
 

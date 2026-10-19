@@ -2,15 +2,16 @@
 //
 // Every sound is synthesized on the fly (oscillators + filtered noise), so there are
 // no audio files to download or cache. The AudioContext is created on the first tap
-// (browsers only allow sound after a user gesture). Mute is remembered on the phone.
+// (browsers only allow sound after a user gesture). Sound starts muted — she plays
+// with it off, so the game leans on visuals and haptics — and the toggle is remembered.
 
 const MUTE_KEY = "purrfect-match:muted";
 
 let ctx = null;
 let master = null;
 let noiseBuf = null;
-let muted = false;
-try { muted = localStorage.getItem(MUTE_KEY) === "1"; } catch { /* storage blocked */ }
+let muted = true;
+try { muted = localStorage.getItem(MUTE_KEY) !== "0"; } catch { /* storage blocked */ }
 
 // Call from a user gesture (tap). Safe to call repeatedly.
 export function unlockAudio() {

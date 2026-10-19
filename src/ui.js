@@ -1,19 +1,11 @@
 // ui.js — title screen, level map trail, HUD (moves/objective/score), dialogs. M3.
 //
-// The HUD (level, moves left, score vs. target, back-to-journey button, sound on/off)
-// and the end-of-level dialog. The level map itself lives in journey.js.
+// The HUD (level, moves left, score vs. target, back-to-journey button) and the
+// end-of-level dialog. The level map itself lives in journey.js.
 
 const fmt = (n) => n.toLocaleString("en-US");
 
-const SPEAKER = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-  <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-  <g class="waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-    <path d="M16 9.5a3.5 3.5 0 0 1 0 5"/><path d="M18.5 7a7 7 0 0 1 0 10"/></g>
-  <g class="cross" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-    <path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></g></svg>`;
-
-// onToggleMute() flips the sound setting and returns the new muted state.
-export function createUI({ onMap, muted = false, onToggleMute = () => muted } = {}) {
+export function createUI({ onMap } = {}) {
   const hud = document.createElement("div");
   hud.id = "hud";
   hud.hidden = true;
@@ -27,8 +19,7 @@ export function createUI({ onMap, muted = false, onToggleMute = () => muted } = 
     <div class="hud-pill hud-score">
       <span class="hud-label">Score</span><span class="hud-value" data-score></span>
       <div class="hud-bar"><div class="hud-fill" data-fill></div></div>
-    </div>
-    <button type="button" class="hud-pill hud-sound" data-sound>${SPEAKER}</button>`;
+    </div>`;
 
   const overlay = document.createElement("div");
   overlay.id = "overlay";
@@ -45,14 +36,6 @@ export function createUI({ onMap, muted = false, onToggleMute = () => muted } = 
   document.body.append(hud, overlay);
   const $ = (root, attr) => root.querySelector(`[${attr}]`);
   const moves = $(hud, "data-moves");
-  const sound = $(hud, "data-sound");
-  const showMuted = (m) => {
-    sound.classList.toggle("muted", m);
-    sound.setAttribute("aria-label", m ? "Sound off — tap to turn on" : "Sound on — tap to mute");
-    sound.setAttribute("aria-pressed", String(m));
-  };
-  showMuted(muted);
-  sound.addEventListener("click", () => showMuted(onToggleMute()));
   hud.querySelector(".hud-map").addEventListener("click", () => onMap && onMap());
 
   return {

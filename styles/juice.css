@@ -1,0 +1,29 @@
+/* juice.css — M2 additions to the HUD: the sound toggle, and a fifth HUD column for it. */
+
+#hud {
+  grid-template-columns: auto auto auto 1fr auto;
+  gap: 6px;
+}
+
+/* Keep "14,900 / 14,900" on one line at 375px. */
+.hud-score .hud-value {
+  font-size: clamp(0.8rem, 3.7vw, 1.05rem);
+  white-space: nowrap;
+}
+
+.hud-sound {
+  pointer-events: auto;
+  min-width: 0;
+  width: 38px;
+  justify-content: center;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-deep);
+  cursor: pointer;
+}
+
+.hud-sound:active { transform: scale(0.92); }
+.hud-sound .cross { display: none; }
+.hud-sound.muted { color: #c9a3b9; }
+.hud-sound.muted .waves { display: none; }
+.hud-sound.muted .cross { display: inline; }

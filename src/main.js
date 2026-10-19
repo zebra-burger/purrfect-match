@@ -13,7 +13,8 @@ import {
 } from "./storage.js";
 import { createJourney, milestoneMessage } from "./journey.js";
 import { createUI } from "./ui.js";
-import { unlockAudio, isMuted, setMuted, sfx, buzz } from "./audio.js";
+import { unlockAudio, sfx, buzz } from "./audio.js";
+import { attachSoundToggle } from "./sound-toggle.js";
 
 // Skip the service worker on localhost so development always loads fresh modules
 // (add ?sw to the URL to test offline mode locally).
@@ -30,11 +31,8 @@ const HINT_DELAY_MS = 6000;
 
 const titleScreen = document.getElementById("title-screen");
 const canvas = document.getElementById("game");
-const ui = createUI({
-  onMap: () => showJourney(),
-  muted: isMuted(),
-  onToggleMute: () => { setMuted(!isMuted()); unlockAudio(); sfx.pop(1); return isMuted(); },
-});
+const ui = createUI({ onMap: () => showJourney() });
+attachSoundToggle(ui.hud);
 let renderer = null;
 let input = null;
 
