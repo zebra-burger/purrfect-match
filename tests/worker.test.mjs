@@ -27,6 +27,8 @@ test("save then load round-trips the backup code", async () => {
   assert.equal(data.level, 42);
   assert.ok(data.savedAt > 0);
   assert.equal(got.headers.get("Access-Control-Allow-Origin"), "https://zebra-burger.github.io");
+  const home = await call(e, "GET", ID, undefined, "https://orangezebra.cloud");
+  assert.equal(home.headers.get("Access-Control-Allow-Origin"), "https://orangezebra.cloud");
 });
 
 test("rejects bad ids, bad bodies and oversized saves", async () => {
@@ -46,5 +48,16 @@ test("CORS preflight only echoes known origins", async () => {
   assert.equal(ok.status, 204);
   assert.equal(ok.headers.get("Access-Control-Allow-Origin"), "http://localhost:8765");
   const other = await call(e, "OPTIONS", ID, undefined, "https://evil.example");
-  assert.equal(other.headers.get("Access-Control-Allow-Origin"), "https://zebra-burger.github.io");
+  assert.equal(other.headers.get("Access-Control-Allow-Origin"), "https://orangezebra.cloud");
+});
+
+test("www redirects to the bare domain; everything else is the game's files", async () => {
+  const e = env();
+  const www = await worker.fetch(new Request("https://www.orangezebra.cloud/?level=3"), e);
+  assert.equal(www.status, 301);
+  assert.equal(www.headers.get("Location"), "https://orangezebra.cloud/?level=3");
+  const served = [];
+  e.ASSETS = { fetch: async (req) => { served.push(new URL(req.url).pathname); return new Response("ok"); } };
+  await worker.fetch(new Request("https://orangezebra.cloud/src/main.js"), e);
+  assert.deepEqual(served, ["/src/main.js"]);
 });

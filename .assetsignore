@@ -1,0 +1,11 @@
+# Files that are NOT published to orangezebra.cloud (see worker/wrangler.toml).
+.git
+.github
+.claude
+.wrangler
+.assetsignore
+worker
+tests
+docs
+node_modules
+*.md

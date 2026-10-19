@@ -1,8 +1,20 @@
-# Purrfect Match cloud backup. Deploy: npx wrangler deploy
-name = "purrfect-match-sync"
+# Purrfect Match: the whole game + cloud backup, served at https://orangezebra.cloud
+# Deploy from this folder: npx wrangler deploy
+name = "purrfect-match"
 main = "index.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
+routes = [
+  { pattern = "orangezebra.cloud", custom_domain = true },
+  { pattern = "www.orangezebra.cloud", custom_domain = true },
+]
+
+# The game files are the repo root (minus what .assetsignore leaves out).
+# The Worker runs first so it can redirect www. and answer /v1/ backup calls.
+[assets]
+directory = ".."
+binding = "ASSETS"
+run_worker_first = true
 
 [[kv_namespaces]]
 binding = "SAVES"
