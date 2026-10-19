@@ -44,18 +44,36 @@ test("using a booster spends one, never below zero; counts are capped", () => {
   assert.equal(p.boosters.paw, MAX_BOOSTERS);
 });
 
-test("backups carry boosters, and a merge keeps the bigger stash of each", async () => {
+test("backups carry boosters, and a merge keeps everything earned on either copy", async () => {
   const a = loadProgress();
-  a.boosters = { paw: 5, shuffle: 0, moves: 2 };
+  addBooster(a, "paw", 4);                        // paw 5
   const back = await importCode(await exportCode(a));
   assert.deepEqual(back.boosters, a.boosters);
   const b = loadProgress();
-  b.boosters = { paw: 1, shuffle: 4, moves: 2 };
-  assert.deepEqual(mergeProgress(a, b).boosters, { paw: 5, shuffle: 4, moves: 2 });
-  assert.deepEqual(mergeProgress(b, a).boosters, { paw: 5, shuffle: 4, moves: 2 });
+  addBooster(b, "shuffle", 3);                    // shuffle 4
+  assert.deepEqual(mergeProgress(a, b).boosters, { paw: 5, shuffle: 4, moves: 1 });
+  assert.deepEqual(mergeProgress(b, a).boosters, { paw: 5, shuffle: 4, moves: 1 });
   // An old save with no boosters field merges cleanly.
   const old = { ...loadProgress(), boosters: undefined };
   assert.equal(mergeProgress(a, old).boosters.paw, 5);
+});
+
+test("a booster used on the phone stays used when an older cloud copy merges in", async () => {
+  const cloud = loadProgress();
+  addBooster(cloud, "moves", 2);                  // 3 +5 Moves, synced to the cloud
+  const phone = await importCode(await exportCode(cloud));
+  assert.ok(useBooster(phone, "moves"));          // she spends one offline → 2
+  const merged = mergeProgress(phone, await importCode(await exportCode(cloud)));
+  assert.equal(merged.boosters.moves, 2);
+  assert.equal(mergeProgress(cloud, phone).boosters.moves, 2);
+  // …and syncing the merged copy back again changes nothing.
+  assert.deepEqual(mergeProgress(merged, merged).boosters, merged.boosters);
+});
+
+test("old saves with a stash but no log keep the stash", async () => {
+  const back = await importCode("j" + Buffer.from(JSON.stringify({ level: 9, boosters: { paw: 4, shuffle: 0, moves: 2 } })).toString("base64url"));
+  assert.deepEqual(back.boosters, { paw: 4, shuffle: 0, moves: 2 });
+  assert.deepEqual(back.boosterLog.earned, { paw: 4, shuffle: 0, moves: 2 });
 });
 
 test("junk booster values in a save are ignored", async () => {

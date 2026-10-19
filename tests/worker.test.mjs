@@ -17,7 +17,7 @@ const call = (e, method, path, body, origin = "https://zebra-burger.github.io") 
 
 test("save then load round-trips the backup code", async () => {
   const e = env();
-  assert.equal((await call(e, "GET", ID)).status, 404);
+  assert.equal((await call(e, "GET", ID)).status, 204, "nothing saved yet");
   const put = await call(e, "PUT", ID, JSON.stringify({ code: "zAbc_-123", level: 42 }));
   assert.equal(put.status, 200);
   const got = await call(e, "GET", ID);

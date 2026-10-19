@@ -415,6 +415,28 @@ h1 {
   cursor: pointer;
 }
 
+.j-cloud {
+  display: block;
+  margin: -4px 0 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.j-status {
+  font-weight: 600;
+  color: var(--accent-deep);
+  background: #ffe8f2;
+  border-radius: 14px;
+  padding: 8px 12px;
+}
+
 .j-chips {
   width: 100%;
   display: grid;

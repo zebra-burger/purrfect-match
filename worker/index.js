@@ -10,7 +10,7 @@
 // link. The stored value is the same compressed backup code the share-link backup
 // uses; the phone merges before it writes, so the server never has to understand it.
 //
-//   GET /v1/save/<id>   → { code, level, savedAt }   (404 if nothing saved yet)
+//   GET /v1/save/<id>   → { code, level, savedAt }   (204 if nothing saved yet)
 //   PUT /v1/save/<id>   ← { code, level }            → { ok, savedAt }
 //
 // Deploy: cd worker && npx wrangler deploy   (bindings ASSETS + SAVES in wrangler.toml)
@@ -66,7 +66,7 @@ async function handleApi(request, env, url) {
 
   if (request.method === "GET") {
     const saved = await env.SAVES.get(key);
-    if (!saved) return json({ error: "no save yet" }, 404, cors);
+    if (!saved) return new Response(null, { status: 204, headers: { ...cors, "Cache-Control": "no-store" } });
     return new Response(saved, {
       headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
     });

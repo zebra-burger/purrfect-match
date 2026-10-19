@@ -1,6 +1,6 @@
 // Service worker: caches the whole game for offline play.
 // Bump CACHE_VERSION on every release so installed phones pick up updates.
-const CACHE_VERSION = "purrfect-v0.7.0";
+const CACHE_VERSION = "purrfect-v0.8.0";
 
 // Everything the game needs to boot and play with no network. Levels are generated
 // on the phone, so there is no level data to fetch — once this is cached, it's endless offline.
@@ -24,6 +24,7 @@ const ASSETS = [
   "src/storage.js",
   "src/ui.js",
   "src/journey.js",
+  "src/cloud.js",
   "src/audio.js",
   "src/sound-toggle.js",
   "src/boosters.js",

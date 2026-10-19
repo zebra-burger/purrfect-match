@@ -7,6 +7,9 @@
 //   stats      lifetime numbers for the journey screen
 //   backup     when/at which level the last backup was sent
 //   boosters   earned (never bought) booster counts: { paw, shuffle, moves }
+//   boosterLog lifetime { earned, spent } per booster, so merging two copies (cloud
+//              sync) can't hand back a booster she already used
+//   syncId     random id for automatic cloud backup (cloud.js); cloud = last sync
 //
 // Every storage access is wrapped — private mode or blocked storage must never stop
 // the game from starting. Backups are compressed into a URL-safe code that restores
@@ -45,6 +48,9 @@ function fresh() {
     backup: { lastLevel: 1, lastAt: null },
     // One of each to start, so she meets them before she's earned any.
     boosters: { paw: 1, shuffle: 1, moves: 1 },
+    boosterLog: { earned: { paw: 1, shuffle: 1, moves: 1 }, spent: { paw: 0, shuffle: 0, moves: 0 } },
+    syncId: null,
+    cloud: { lastAt: null, lastLevel: 0 },
     updatedAt: 0,
   };
 }
@@ -65,6 +71,20 @@ function normalize(raw) {
       if (Number.isInteger(v) && v >= 0) p.boosters[k] = Math.min(v, MAX_BOOSTERS);
     }
   }
+  // The log: older saves have none, so their stash counts as earned. If the count and
+  // the log ever disagree, the count wins and the log is squared up to match it.
+  const count = (n) => (Number.isInteger(n) && n >= 0 ? n : null);
+  const log = raw.boosterLog && typeof raw.boosterLog === "object" ? raw.boosterLog : null;
+  for (const k of BOOSTERS) {
+    let earned = count(log?.earned?.[k]) ?? p.boosters[k];
+    let spent = count(log?.spent?.[k]) ?? 0;
+    const drift = p.boosters[k] - (earned - spent);
+    if (drift > 0) earned += drift; else spent -= drift;
+    p.boosterLog.earned[k] = earned;
+    p.boosterLog.spent[k] = spent;
+  }
+  if (/^[0-9a-f]{32}$/.test(String(raw.syncId || ""))) p.syncId = raw.syncId;
+  if (raw.cloud && typeof raw.cloud === "object") Object.assign(p.cloud, raw.cloud);
   if (Number.isFinite(raw.updatedAt)) p.updatedAt = raw.updatedAt;
   return p;
 }
@@ -164,13 +184,17 @@ export function recordResult(progress, { level, won, score, movesLeft, moves, ca
 // --- Boosters -----------------------------------------------------------------------
 
 export function addBooster(progress, kind, n = 1) {
-  progress.boosters[kind] = Math.min(MAX_BOOSTERS, (progress.boosters[kind] || 0) + n);
+  const have = progress.boosters[kind] || 0;
+  const add = Math.max(0, Math.min(MAX_BOOSTERS, have + n) - have);
+  progress.boosters[kind] = have + add;
+  if (progress.boosterLog) progress.boosterLog.earned[kind] += add;
 }
 
 // Spends one if she has it; returns whether it was spent.
 export function useBooster(progress, kind) {
   if (!(progress.boosters[kind] > 0)) return false;
   progress.boosters[kind]--;
+  if (progress.boosterLog) progress.boosterLog.spent[kind]++;
   return true;
 }
 
@@ -226,8 +250,17 @@ export function mergeProgress(a, b) {
   if (b.stats.firstDay && (!a.stats.firstDay || b.stats.firstDay < a.stats.firstDay)) out.stats.firstDay = b.stats.firstDay;
   out.backup.lastLevel = Math.max(a.backup.lastLevel || 1, b.backup.lastLevel || 1);
   out.backup.lastAt = Math.max(a.backup.lastAt || 0, b.backup.lastAt || 0) || null;
-  // Boosters: the larger stash wins per kind (a merge never takes any away).
+  // Boosters: the most ever earned minus the most ever spent, per kind — so a booster
+  // earned on either copy is kept, and one used on either copy stays used.
   const nb = normalize(b);
-  for (const k of BOOSTERS) out.boosters[k] = Math.max(out.boosters[k], nb.boosters[k]);
+  for (const k of BOOSTERS) {
+    const earned = Math.max(out.boosterLog.earned[k], nb.boosterLog.earned[k]);
+    const spent = Math.max(out.boosterLog.spent[k], nb.boosterLog.spent[k]);
+    out.boosterLog.earned[k] = earned;
+    out.boosterLog.spent[k] = spent;
+    out.boosters[k] = Math.max(0, Math.min(MAX_BOOSTERS, earned - spent));
+  }
+  out.syncId = a.syncId || nb.syncId;
+  out.cloud.lastAt = Math.max(a.cloud?.lastAt || 0, nb.cloud.lastAt || 0) || null;
   return out;
 }
