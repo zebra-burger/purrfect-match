@@ -13,7 +13,7 @@
 import { importCode, exportCode, mergeProgress, saveProgress } from "./storage.js";
 
 // OAuth client id from Google Cloud (public; see README → "Google sign-in").
-export const GOOGLE_CLIENT_ID = "";
+export const GOOGLE_CLIENT_ID = "249622716840-bmm76uh8a4i8ajm8lguluh2oris8aqdo.apps.googleusercontent.com";
 
 const API = (typeof location !== "undefined" && location.hostname === "orangezebra.cloud")
   ? "/v1/" : "https://orangezebra.cloud/v1/";

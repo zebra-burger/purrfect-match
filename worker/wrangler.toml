@@ -22,6 +22,6 @@ id = "aa787a6df8a048f596389f8bd795f9ce"
 
 [vars]
 # Google OAuth client id (public) — the same value as GOOGLE_CLIENT_ID in src/cloud.js.
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "249622716840-bmm76uh8a4i8ajm8lguluh2oris8aqdo.apps.googleusercontent.com"
 # Comma-separated Google accounts allowed to back up; empty = any Google account.
 ALLOWED_EMAILS = "kwanie06@gmail.com"
