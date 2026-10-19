@@ -6,6 +6,7 @@
 //   stars      string, one char per level: "0" not yet won, "1".."3" best stars
 //   stats      lifetime numbers for the journey screen
 //   backup     when/at which level the last backup was sent
+//   boosters   earned (never bought) booster counts: { paw, shuffle, moves }
 //
 // Every storage access is wrapped — private mode or blocked storage must never stop
 // the game from starting. Backups are compressed into a URL-safe code that restores
@@ -13,6 +14,13 @@
 
 const KEY = "purrfect-match:save";
 export const PLAYER = "Wifey";
+
+// Boosters are earned, never bought: one for every level she first three-stars
+// (taking turns Paw Swipe → Catnip Shuffle → +5 Moves), and one of each as a gift
+// when she finishes a world. No lives, no energy, no shop.
+export const BOOSTERS = ["paw", "shuffle", "moves"];
+export const MAX_BOOSTERS = 99;
+const WORLD_SIZE = 20; // matches journey.js
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -35,6 +43,8 @@ function fresh() {
       firstDay: today(),
     },
     backup: { lastLevel: 1, lastAt: null },
+    // One of each to start, so she meets them before she's earned any.
+    boosters: { paw: 1, shuffle: 1, moves: 1 },
     updatedAt: 0,
   };
 }
@@ -49,6 +59,12 @@ function normalize(raw) {
     for (const k of Object.keys(p.stats)) if (raw.stats[k] != null) p.stats[k] = raw.stats[k];
   }
   if (raw.backup && typeof raw.backup === "object") Object.assign(p.backup, raw.backup);
+  if (raw.boosters && typeof raw.boosters === "object") {
+    for (const k of BOOSTERS) {
+      const v = raw.boosters[k];
+      if (Number.isInteger(v) && v >= 0) p.boosters[k] = Math.min(v, MAX_BOOSTERS);
+    }
+  }
   if (Number.isFinite(raw.updatedAt)) p.updatedAt = raw.updatedAt;
   return p;
 }
@@ -121,22 +137,41 @@ export function recordResult(progress, { level, won, score, movesLeft, moves, ca
   const s = progress.stats;
   s.cats += cats || 0;
   s.bestCascade = Math.max(s.bestCascade, bestCascade || 0);
-  if (!won) return { stars: 0, newBest: false, firstWin: false, improved: false };
+  if (!won) return { stars: 0, newBest: false, firstWin: false, improved: false, earned: [] };
 
   const stars = starsForResult(movesLeft, moves);
   const before = starsFor(progress, level);
   const firstWin = before === 0;
+  const earned = [];
   if (stars > before) {
     const arr = progress.stars.padEnd(level, "0").split("");
     arr[level - 1] = String(stars);
     progress.stars = arr.join("");
-    if (stars === 3) s.threeStars++;
+    if (stars === 3) {
+      s.threeStars++;
+      earned.push(BOOSTERS[(s.threeStars - 1) % BOOSTERS.length]);
+    }
   }
+  if (firstWin && level % WORLD_SIZE === 0) earned.push(...BOOSTERS);
+  for (const k of earned) addBooster(progress, k);
   if (firstWin) s.wins++;
   const newBest = score > s.bestScore;
   if (newBest) s.bestScore = score;
   progress.level = Math.max(progress.level, level + 1);
-  return { stars, newBest, firstWin, improved: stars > before && !firstWin };
+  return { stars, newBest, firstWin, improved: stars > before && !firstWin, earned };
+}
+
+// --- Boosters -----------------------------------------------------------------------
+
+export function addBooster(progress, kind, n = 1) {
+  progress.boosters[kind] = Math.min(MAX_BOOSTERS, (progress.boosters[kind] || 0) + n);
+}
+
+// Spends one if she has it; returns whether it was spent.
+export function useBooster(progress, kind) {
+  if (!(progress.boosters[kind] > 0)) return false;
+  progress.boosters[kind]--;
+  return true;
 }
 
 // --- Backup codes -------------------------------------------------------------------
@@ -191,5 +226,8 @@ export function mergeProgress(a, b) {
   if (b.stats.firstDay && (!a.stats.firstDay || b.stats.firstDay < a.stats.firstDay)) out.stats.firstDay = b.stats.firstDay;
   out.backup.lastLevel = Math.max(a.backup.lastLevel || 1, b.backup.lastLevel || 1);
   out.backup.lastAt = Math.max(a.backup.lastAt || 0, b.backup.lastAt || 0) || null;
+  // Boosters: the larger stash wins per kind (a merge never takes any away).
+  const nb = normalize(b);
+  for (const k of BOOSTERS) out.boosters[k] = Math.max(out.boosters[k], nb.boosters[k]);
   return out;
 }

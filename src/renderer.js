@@ -445,10 +445,11 @@ export class Renderer {
     return s;
   }
 
-  // Portrait-first: the board takes the full width (minus gutters) below the HUD,
-  // capped so it also fits the height on landscape/desktop.
-  layout(topInset = this.topInset) {
+  // Portrait-first: the board takes the full width (minus gutters) between the HUD
+  // and the booster tray (`bottomEdge`, a y in px), capped so it also fits landscape.
+  layout(topInset = this.topInset, bottomEdge = this.bottomEdge) {
     this.topInset = topInset;
+    this.bottomEdge = bottomEdge;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     this.canvas.width = Math.round(w * dpr);
@@ -458,7 +459,7 @@ export class Renderer {
     if (!this.board) return;
     const pad = 12;
     const { rows, cols } = this.board;
-    const availH = h - topInset - pad * 2;
+    const availH = Math.min(h, bottomEdge ?? h) - topInset - pad * 2;
     this.ts = Math.floor(Math.min((w - pad * 2) / cols, availH / rows, 72));
     this.ox = Math.round((w - this.ts * cols) / 2);
     this.oy = Math.round(topInset + pad + Math.max(0, (availH - this.ts * rows) / 2));

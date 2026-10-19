@@ -4,7 +4,8 @@
 //   - press on a cat and drag ~a third of a tile in any direction → swap that way
 //   - tap a cat, then tap a neighbour → swap; tap it again (or far away) → deselect/reselect
 //
-// attachInput(canvas, renderer, { onSwap(a, b), onSelect(cell | null), canInteract() })
+// attachInput(canvas, renderer, { onSwap(a, b), onSelect(cell | null), canInteract(), onTap?(cell) })
+// onTap, when given, sees every press first; returning true swallows it (Paw Swipe aiming).
 
 export function attachInput(canvas, renderer, handlers) {
   let press = null;     // { cell, x, y, id } while a pointer is down on a tile
@@ -24,6 +25,7 @@ export function attachInput(canvas, renderer, handlers) {
     if (!handlers.canInteract()) return;
     const cell = renderer.cellAt(e.clientX, e.clientY);
     if (!cell) { select(null); return; }
+    if (handlers.onTap && handlers.onTap(cell)) { select(null); return; }
     press = { cell, x: e.clientX, y: e.clientY, id: e.pointerId };
     canvas.setPointerCapture(e.pointerId);
   });

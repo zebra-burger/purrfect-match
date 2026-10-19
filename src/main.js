@@ -9,8 +9,9 @@ import { mulberry32 } from "./rng.js";
 import { Renderer } from "./renderer.js";
 import { attachInput } from "./input.js";
 import {
-  PLAYER, loadProgress, saveProgress, requestPersistence, recordPlay, recordResult,
+  PLAYER, loadProgress, saveProgress, requestPersistence, recordPlay, recordResult, useBooster,
 } from "./storage.js";
+import { createBoosterTray, BOOSTER_INFO } from "./boosters.js";
 import { createJourney, milestoneMessage } from "./journey.js";
 import { createUI, GOAL_ICONS } from "./ui.js";
 import { unlockAudio, sfx, buzz } from "./audio.js";
@@ -33,6 +34,7 @@ const titleScreen = document.getElementById("title-screen");
 const canvas = document.getElementById("game");
 const ui = createUI({ onMap: () => showJourney() });
 attachSoundToggle(ui.hud);
+const tray = createBoosterTray({ onUse: (kind) => useBoosterNow(kind) });
 let renderer = null;
 let input = null;
 
@@ -51,6 +53,8 @@ const game = {
   over: false,
   abandoned: false,
   hintTimer: 0,
+  aiming: false,   // Paw Swipe armed: the next tap on the board swipes that cat away
+  catsRecorded: 0, // cats already counted in her stats (an Out of moves → +5 Moves rescue)
 };
 
 const journey = createJourney({
@@ -88,6 +92,8 @@ function showJourney() {
   if (input) input.clearSelection();
   ui.hideDialog();
   ui.hideHud();
+  tray.hide();
+  setAiming(false);
   canvas.hidden = true;
   journey.show();
 }
@@ -96,6 +102,7 @@ function playLevel(n) {
   journey.hide();
   canvas.hidden = false;
   ui.showHud();
+  tray.show();
   if (!renderer) {
     renderer = new Renderer(canvas);
     canvas.addEventListener("pointerdown", unlockAudio); // iOS can re-suspend audio
@@ -103,8 +110,13 @@ function playLevel(n) {
       canInteract: () => !game.busy && !game.over,
       onSelect: (cell) => { renderer.selected = cell; armHint(); },
       onSwap: (a, b) => playSwap(a, b),
+      onTap: (cell) => {
+        if (!game.aiming) return false;
+        pawSwipe(cell);
+        return true;
+      },
     });
-    window.addEventListener("resize", () => renderer.layout(ui.hudBottom()));
+    window.addEventListener("resize", () => renderer.layout(ui.hudBottom(), tray.top()));
     if (isLocal) window.purrfect = { game, renderer, progress, startLevel: playLevel, showJourney }; // dev/test handle
   }
   startLevel(n);
@@ -122,11 +134,13 @@ function startLevel(n) {
   game.busy = false;
   game.over = false;
   game.abandoned = false;
+  game.catsRecorded = 0;
+  setAiming(false);
   recordPlay(progress);
   saveProgress(progress);
   updateHud();
   renderer.setBoard(game.board);
-  renderer.layout(ui.hudBottom());
+  renderer.layout(ui.hudBottom(), tray.top());
   ui.toast(...goalText(game.lvl));
   armHint();
 }
@@ -154,6 +168,64 @@ function updateHud() {
     target: game.lvl.targets.score,
     goals: goalsLeft(game.board, game.lvl.targets),
   });
+  tray.update(progress.boosters, !game.busy && !game.over);
+}
+
+// --- Boosters ---------------------------------------------------------------------
+
+function setAiming(on) {
+  game.aiming = on;
+  tray.setArmed(on ? "paw" : null);
+  canvas.classList.toggle("aiming", on);
+}
+
+function useBoosterNow(kind) {
+  if (game.busy || game.over) return;
+  if (kind === "paw") {
+    // Tap once to aim, tap again to change her mind. Nothing is spent until she swipes.
+    setAiming(!game.aiming);
+    if (game.aiming) ui.toast("Tap a cat to swipe it away 🐾", null, 1800);
+    return;
+  }
+  setAiming(false);
+  if (kind === "shuffle") return catnipShuffle();
+  if (kind === "moves") {
+    if (!useBooster(progress, "moves")) return;
+    saveProgress(progress);
+    game.movesLeft += 5;
+    sfx.sparkle();
+    ui.toast("+5 moves! ➕");
+    updateHud();
+  }
+}
+
+async function pawSwipe(cell) {
+  setAiming(false);
+  const { board } = game;
+  if (game.busy || game.over || !board.canPaw(cell.r, cell.c)) return;
+  if (!useBooster(progress, "paw")) return;
+  saveProgress(progress);
+  game.busy = true;
+  renderer.hint = null;
+  clearTimeout(game.hintTimer);
+  updateHud();
+  buzz(20);
+  await resolveCascades(null, cell);
+  await afterTurn();
+}
+
+async function catnipShuffle() {
+  if (!useBooster(progress, "shuffle")) return;
+  saveProgress(progress);
+  game.busy = true;
+  renderer.hint = null;
+  clearTimeout(game.hintTimer);
+  updateHud();
+  sfx.sparkle();
+  game.board.shuffle();
+  await renderer.animateShuffle();
+  await resolveCascades();
+  await afterTurn();
 }
 
 function armHint() {
@@ -189,7 +261,13 @@ async function playSwap(a, b) {
   game.movesLeft--;
   updateHud();
   await resolveCascades([a, b]);
+  await afterTurn();
+}
 
+// Win, lose, or reshuffle a stuck board and hand control back to her.
+async function afterTurn() {
+  const { board } = game;
+  if (game.abandoned) return;
   if (goalsMet(board, game.lvl.targets, game.score)) return finish(true);
   if (game.movesLeft <= 0) return finish(false);
 
@@ -199,17 +277,19 @@ async function playSwap(a, b) {
     await resolveCascades();
   }
   game.busy = false;
+  updateHud();
   armHint();
 }
 
 // Clear → fall → refill, repeating while new matches form. Each cascade step
 // multiplies the points, so chain reactions are worth chasing. `swap` (the move just
-// made) decides where new specials land and fires special swaps on the first step.
-async function resolveCascades(swap = null) {
+// made) decides where new specials land and fires special swaps on the first step;
+// `poke` is a Paw Swipe's cell.
+async function resolveCascades(swap = null, poke = null) {
   const { board } = game;
   await collectFish();
   for (let cascade = 1; ; cascade++) {
-    const step = board.resolveStep(cascade === 1 ? swap : null);
+    const step = board.resolveStep(cascade === 1 ? swap : null, cascade === 1 ? poke : null);
     if (!step) return;
     game.bestCascade = Math.max(game.bestCascade, cascade);
     game.score += step.points * cascade;
@@ -262,9 +342,11 @@ function finish(won) {
   const target = game.lvl.targets.score;
   const result = recordResult(progress, {
     level, won, score: game.score, movesLeft: game.movesLeft, moves: game.lvl.moves,
-    cats: game.cats, bestCascade: game.bestCascade,
+    cats: game.cats - game.catsRecorded, bestCascade: game.bestCascade,
   });
+  game.catsRecorded = game.cats;
   saveProgress(progress);
+  updateHud();
   const toMap = { label: "Map", secondary: true, onClick: showJourney };
 
   if (won) {
@@ -275,10 +357,11 @@ function finish(won) {
     const ribbon = (result.firstWin && milestoneMessage(level))
       || (result.improved ? `New best on this level — ${result.stars} stars! 🌟` : null)
       || (result.newBest ? `Your highest score ever, ${PLAYER}! 🏅` : null);
+    const gift = earnedText(result.earned);
     setTimeout(() => ui.showDialog({
       title: titles[result.stars - 1],
       body: `Level ${fmt(level)} done with ${fmt(game.score)} points and ${spare} to spare.`,
-      ribbon,
+      ribbon: [ribbon, gift].filter(Boolean).join(" ") || null,
       stars: result.stars,
       win: true,
       actions: [toMap, { label: "Next level", onClick: () => playLevel(level + 1) }],
@@ -292,10 +375,40 @@ function finish(won) {
         (game.score >= 0.75 * target ? "So close — one more go?" : `The cats believe in you, ${PLAYER}.`)
       : `Just ${left.map((g) => `${g.left} ${GOAL_ICONS[g.kind]}`).join(" and ")} to go. ` +
         (total <= 3 ? "So close — one more go?" : `The cats believe in you, ${PLAYER}.`);
-    setTimeout(() => ui.showDialog({
-      title: "Out of moves",
-      body,
-      actions: [toMap, { label: "Try again", onClick: () => playLevel(level) }],
-    }), 350);
+    const actions = [toMap, { label: "Try again", onClick: () => playLevel(level) }];
+    const have = progress.boosters.moves;
+    if (have > 0) {
+      actions.unshift({
+        label: `Keep going: +5 moves (${have})`,
+        className: "booster-offer",
+        onClick: () => keepGoing(),
+      });
+    }
+    setTimeout(() => ui.showDialog({ title: "Out of moves", body, actions }), 350);
   }
+}
+
+// "Out of moves" → spend a +5 Moves booster and carry on from the same board.
+function keepGoing() {
+  if (!useBooster(progress, "moves")) return;
+  saveProgress(progress);
+  game.movesLeft += 5;
+  game.over = false;
+  game.busy = false;
+  sfx.sparkle();
+  ui.toast("+5 moves! You've got this 💕");
+  updateHud();
+  armHint();
+}
+
+// "You earned a Paw Swipe! 🐾" for the win dialog (world gifts give one of each).
+function earnedText(earned) {
+  if (!earned.length) return null;
+  const one = (k) => `${BOOSTER_INFO[k].name} ${BOOSTER_INFO[k].icon}`;
+  if (earned.length >= 3) {
+    // recordResult lists the three-star booster first, then the world's three.
+    const extra = earned.slice(0, earned.length - 3);
+    return `🎁 World gift: one of every booster${extra.length ? `, plus a ${one(extra[0])} for 3 stars` : ""}!`;
+  }
+  return `🎁 You earned a ${one(earned[0])}!`;
 }

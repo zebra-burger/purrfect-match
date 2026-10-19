@@ -209,6 +209,8 @@ export class Board {
   // (cleared cells are null, new specials are in place; call collapse() next).
   // Pass the swapped pair on the step right after a move, so new specials land where
   // she swiped and special swaps (Disco + anything, special + special) fire.
+  // Pass `poke` ({ r, c }) instead for a Paw Swipe: that one tile is cleared (a special
+  // goes off as if blasted) and the rest of the step plays out as usual.
   // Returns null when nothing clears, else {
   //   groups:  the match groups (empty for a swap combo),
   //   removed: [{ r, c, tile }],
@@ -216,7 +218,7 @@ export class Board {
   //   blasts:  [{ special, r, c, dir?, radius?, color?, targets? }] for the renderer,
   //   points:  before the cascade multiplier,
   // }
-  resolveStep(swap = null) {
+  resolveStep(swap = null, poke = null) {
     const key = (r, c) => r * this.cols + c;
     const clear = new Map();
     const protect = new Set();
@@ -292,6 +294,9 @@ export class Board {
           markArea(b.r, b.c, 2);
         }
       }
+    } else if (poke) {
+      mark(poke.r, poke.c);
+      if (!clear.size) return null;
     } else {
       groups = this.findMatches();
       if (!groups.length) return null;
@@ -400,6 +405,12 @@ export class Board {
     if (!isPower(ta) && !isPower(tb)) return false;
     if (!ta || !tb || ta.special === "fish" || tb.special === "fish") return false;
     return ta.special === "disco" || tb.special === "disco" || (isPower(ta) && isPower(tb));
+  }
+
+  // Can a Paw Swipe take this cell? Any cat or special; not a fish treat or an empty cell.
+  canPaw(r, c) {
+    const t = this.get(r, c);
+    return Boolean(t && t.special !== "fish");
   }
 
   // Removes the tiles in the given match groups. Returns [{ r, c, tile }] removed.

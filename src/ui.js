@@ -86,7 +86,7 @@ export function createUI({ onMap } = {}) {
       toast.classList.add("show");
       toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
     },
-    // actions: [{ label, onClick, secondary }]; stars: 0 hides the star row.
+    // actions: [{ label, onClick, secondary, className }]; stars: 0 hides the star row.
     showDialog({ title, body, ribbon, stars = 0, win, actions }) {
       $(overlay, "data-title").textContent = title;
       $(overlay, "data-body").textContent = body;
@@ -103,6 +103,7 @@ export function createUI({ onMap } = {}) {
         b.type = "button";
         b.textContent = a.label;
         if (a.secondary) b.className = "secondary";
+        if (a.className) b.classList.add(a.className);
         b.addEventListener("click", () => { overlay.hidden = true; a.onClick(); });
         box.append(b);
       }

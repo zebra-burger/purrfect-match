@@ -1,0 +1,88 @@
+/* boosters.css — M4: the booster tray under the board and the "+5 moves" offer. */
+
+#booster-tray {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  max-width: 560px;
+  margin: 0 auto;
+  z-index: 2;
+}
+
+.booster {
+  position: relative;
+  flex: 1 1 0;
+  max-width: 116px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font: inherit;
+  color: var(--ink);
+  background: #ffffffe6;
+  border: 2px solid #ffc4dd;
+  border-radius: 18px;
+  padding: 6px 8px 5px;
+  box-shadow: 0 4px 0 #ffc4dd, 0 3px 10px rgba(240, 71, 143, 0.18);
+  cursor: pointer;
+  transition: transform 0.12s, opacity 0.2s;
+}
+
+.booster:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #ffc4dd; }
+.booster:disabled { cursor: default; }
+.booster.empty { opacity: 0.45; filter: grayscale(0.6); }
+
+.booster-icon { font-size: 1.5rem; line-height: 1.1; }
+
+.booster-name {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent-deep);
+}
+
+.booster-count {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 24px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 0 var(--accent-shadow);
+}
+
+.booster.empty .booster-count { background: #d9b8c9; box-shadow: none; }
+
+/* Paw Swipe waiting for her to pick a cat. */
+.booster.armed {
+  border-color: var(--accent-deep);
+  background: #ffe1ee;
+  animation: pulse 0.9s ease-in-out infinite;
+}
+
+canvas.aiming { cursor: crosshair; }
+
+/* "Keep going with +5 moves" sits on its own row above Map / Try again. */
+.dialog-actions { flex-wrap: wrap; }
+
+#overlay button.booster-offer {
+  flex-basis: 100%;
+  font-size: 1.05rem;
+  padding: 12px 18px;
+  background: linear-gradient(180deg, #d4b5ff, #a774f0);
+  box-shadow: 0 5px 0 #7d4cc4;
+}
+
+#overlay button.booster-offer:active { box-shadow: 0 2px 0 #7d4cc4; }
