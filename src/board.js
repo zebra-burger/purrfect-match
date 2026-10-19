@@ -1,24 +1,35 @@
 // board.js — grid state, match detection, cascades, gravity, special-tile creation.
-// Pure logic, no rendering. Implemented in M1.
+// Pure logic, no rendering. Implemented in M1; special cats added in M2.
 //
 // A board is a rows×cols grid. `mask[r][c]` says whether a cell exists (board shapes
 // like diamonds and donuts are rectangles with cells masked out). Each existing cell
 // holds a tile `{ id, color, special }` or null while a cascade is resolving.
 // Tile ids are stable across moves so the renderer can animate the same tile around.
 //
-// Match kinds, used for scoring now and special-tile creation in M3:
+// Match kinds, used for scoring and special-cat creation:
 //   "three" — a line of 3
-//   "four"  — a line of 4            (M3: Zoomie Cat)
-//   "lt"    — an L or T of 5+ cells  (M3: Boom Cat)
-//   "five"  — a line of 5+           (M3: Disco Cat)
+//   "four"  — a line of 4            → Zoomie Cat (striped; clears its row or column)
+//   "lt"    — an L or T of 5+ cells  → Boom Cat (clears the 3×3 around it)
+//   "five"  — a line of 5+           → Disco Cat (colorless; swap it with any cat to
+//                                       clear every cat of that color)
+//
+// A special is a tile with `special` set ("zoomie" | "boom" | "disco"); a Zoomie also
+// carries `dir` ("row" | "col"). Disco Cats have color null so they never match.
+// resolveStep() runs one clear: matches, special creation, special effects (chaining
+// through any specials they hit), and the swap combos.
 
 let nextTileId = 1;
 
-export function makeTile(color) {
-  return { id: nextTileId++, color, special: null };
+export function makeTile(color, special = null, dir = null) {
+  const tile = { id: nextTileId++, color, special };
+  if (dir) tile.dir = dir;
+  return tile;
 }
 
 export const MATCH_POINTS = { three: 60, four: 120, lt: 180, five: 250 };
+export const SPECIAL_OF = { four: "zoomie", lt: "boom", five: "disco" };
+// Each tile a special clears beyond the match itself.
+export const BLAST_POINTS = 30;
 
 export class Board {
   // colors: 2D array of color indices (null where the mask has no cell).
@@ -32,6 +43,13 @@ export class Board {
     this.grid = mask.map((row, r) =>
       row.map((exists, c) => (exists && colors[r][c] != null ? makeTile(colors[r][c]) : null))
     );
+  }
+
+  // Independent copy for look-ahead (tiles are copied too; refills draw from `rng`).
+  clone(rng = this.rng) {
+    const b = Object.create(Board.prototype);
+    Object.assign(b, this, { rng, mask: this.mask, grid: this.grid.map((row) => row.map((t) => t && { ...t })) });
+    return b;
   }
 
   exists(r, c) {
@@ -62,7 +80,7 @@ export class Board {
         let j = 0;
         while (j < inner) {
           const tile = at(i, j);
-          if (!tile) { j++; continue; }
+          if (!tile || tile.color == null) { j++; continue; }
           let end = j + 1;
           while (end < inner && at(i, end) && at(i, end).color === tile.color) end++;
           if (end - j >= 3) {
@@ -115,6 +133,186 @@ export class Board {
     });
   }
 
+  // One resolution step: everything that clears right now, with the board updated
+  // (cleared cells are null, new specials are in place; call collapse() next).
+  // Pass the swapped pair on the step right after a move, so new specials land where
+  // she swiped and special swaps (Disco + anything, special + special) fire.
+  // Returns null when nothing clears, else {
+  //   groups:  the match groups (empty for a swap combo),
+  //   removed: [{ r, c, tile }],
+  //   created: [{ r, c, tile }]  tiles that just became specials (they stay on the board),
+  //   blasts:  [{ special, r, c, dir?, radius?, color?, targets? }] for the renderer,
+  //   points:  before the cascade multiplier,
+  // }
+  resolveStep(swap = null) {
+    const key = (r, c) => r * this.cols + c;
+    const clear = new Map();
+    const protect = new Set();
+    const consumed = new Set(); // tile ids whose effect is already accounted for
+    const queue = [];
+    const blasts = [];
+    const created = [];
+    let groups = [];
+
+    const mark = (r, c) => {
+      const t = this.get(r, c), k = key(r, c);
+      if (!t || protect.has(k) || clear.has(k)) return;
+      clear.set(k, { r, c });
+      if (t.special && !consumed.has(t.id)) queue.push({ r, c, tile: t });
+    };
+    const markRow = (r) => { for (let c = 0; c < this.cols; c++) mark(r, c); };
+    const markCol = (c) => { for (let r = 0; r < this.rows; r++) mark(r, c); };
+    const markArea = (r0, c0, rad) => {
+      for (let r = r0 - rad; r <= r0 + rad; r++) for (let c = c0 - rad; c <= c0 + rad; c++) mark(r, c);
+    };
+    const cellsWhere = (fn) => {
+      const out = [];
+      for (let r = 0; r < this.rows; r++)
+        for (let c = 0; c < this.cols; c++) { const t = this.get(r, c); if (t && fn(t)) out.push({ r, c }); }
+      return out;
+    };
+
+    if (swap && this.isSpecialSwap(swap[0], swap[1])) {
+      // The dragged tile now sits at swap[1]; combos go off there.
+      const [a, b] = swap;
+      const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
+      if (ta.special === "disco" || tb.special === "disco") {
+        const [disco, dp, other, op] = tb.special === "disco" ? [tb, b, ta, a] : [ta, a, tb, b];
+        consumed.add(disco.id);
+        if (other.special === "disco") {
+          // Disco + Disco: the whole board.
+          consumed.add(other.id);
+          blasts.push({ special: "disco", r: dp.r, c: dp.c, targets: cellsWhere(() => true) });
+          cellsWhere(() => true).forEach(({ r, c }) => mark(r, c));
+        } else {
+          // Disco + cat: every cat of that color. Disco + Zoomie/Boom: they all turn
+          // into that special first, then go off.
+          const targets = cellsWhere((t) => t.color === other.color);
+          if (other.special) {
+            targets.forEach(({ r, c }, i) => {
+              const t = this.grid[r][c];
+              if (t.special) return;
+              t.special = other.special;
+              if (other.special === "zoomie") t.dir = i % 2 ? "row" : "col";
+            });
+          }
+          blasts.push({ special: "disco", r: dp.r, c: dp.c, color: other.color, targets });
+          mark(dp.r, dp.c);
+          mark(op.r, op.c);
+          targets.forEach(({ r, c }) => mark(r, c));
+        }
+      } else {
+        consumed.add(ta.id).add(tb.id);
+        mark(a.r, a.c); mark(b.r, b.c);
+        const kinds = [ta.special, tb.special].sort().join("+");
+        if (kinds === "zoomie+zoomie") {
+          blasts.push({ special: "zoomie", r: b.r, c: b.c, dir: "row" }, { special: "zoomie", r: b.r, c: b.c, dir: "col" });
+          markRow(b.r); markCol(b.c);
+        } else if (kinds === "boom+zoomie") {
+          for (let d = -1; d <= 1; d++) {
+            blasts.push({ special: "zoomie", r: b.r + d, c: b.c, dir: "row" }, { special: "zoomie", r: b.r, c: b.c + d, dir: "col" });
+            markRow(b.r + d); markCol(b.c + d);
+          }
+        } else {
+          blasts.push({ special: "boom", r: b.r, c: b.c, radius: 2 });
+          markArea(b.r, b.c, 2);
+        }
+      }
+    } else {
+      groups = this.findMatches();
+      if (!groups.length) return null;
+      for (const g of groups) {
+        const special = SPECIAL_OF[g.kind];
+        if (!special) continue;
+        const at = this.specialCellFor(g, swap);
+        if (!at) continue;
+        let dir;
+        if (special === "zoomie") {
+          if (swap) dir = swap[0].r === swap[1].r ? "row" : "col";
+          else dir = g.cells.every((cell) => cell.r === g.cells[0].r) ? "row" : "col";
+        }
+        protect.add(key(at.r, at.c));
+        created.push({ r: at.r, c: at.c, tile: this.grid[at.r][at.c], special, dir });
+      }
+      for (const g of groups) for (const { r, c } of g.cells) mark(r, c);
+    }
+    const matched = clear.size;
+
+    while (queue.length) {
+      const { r, c, tile } = queue.shift();
+      consumed.add(tile.id);
+      if (tile.special === "zoomie") {
+        blasts.push({ special: "zoomie", r, c, dir: tile.dir });
+        if (tile.dir === "row") markRow(r); else markCol(c);
+      } else if (tile.special === "boom") {
+        blasts.push({ special: "boom", r, c, radius: 1 });
+        markArea(r, c, 1);
+      } else if (tile.special === "disco") {
+        // A Disco Cat caught in a blast takes out the most common color.
+        const color = this.dominantColor();
+        const targets = color == null ? [] : cellsWhere((t) => t.color === color);
+        blasts.push({ special: "disco", r, c, color, targets });
+        targets.forEach((p) => mark(p.r, p.c));
+      }
+    }
+
+    const removed = [];
+    for (const { r, c } of clear.values()) {
+      removed.push({ r, c, tile: this.grid[r][c] });
+      this.grid[r][c] = null;
+    }
+    for (const cr of created) {
+      cr.tile.special = cr.special;
+      if (cr.dir) cr.tile.dir = cr.dir;
+      if (cr.special === "disco") cr.tile.color = null;
+    }
+
+    const matchPoints = groups.reduce((sum, g) => sum + MATCH_POINTS[g.kind], 0);
+    const extra = groups.length ? removed.length - matched : removed.length;
+    return {
+      groups,
+      removed,
+      created: created.map(({ r, c, tile }) => ({ r, c, tile })),
+      blasts,
+      points: matchPoints + BLAST_POINTS * Math.max(0, extra),
+    };
+  }
+
+  // Where a match's new special appears: the swapped cell if it's in the match,
+  // else the corner of an L/T, else the middle of the line. Never on an existing special.
+  specialCellFor(group, swap) {
+    const free = (cell) => !this.grid[cell.r][cell.c].special;
+    const inGroup = (p) => group.cells.some((cell) => cell.r === p.r && cell.c === p.c);
+    if (swap) {
+      const hit = [swap[1], swap[0]].find((p) => inGroup(p) && free(p));
+      if (hit) return hit;
+    }
+    if (group.kind === "lt") {
+      const corner = group.cells.find((cell) =>
+        (inGroup({ r: cell.r, c: cell.c - 1 }) || inGroup({ r: cell.r, c: cell.c + 1 })) &&
+        (inGroup({ r: cell.r - 1, c: cell.c }) || inGroup({ r: cell.r + 1, c: cell.c })));
+      if (corner && free(corner)) return corner;
+    }
+    const mid = group.cells[Math.floor(group.cells.length / 2)];
+    if (free(mid)) return mid;
+    return group.cells.find(free) || null;
+  }
+
+  // The color with the most cats on the board (lowest index wins ties).
+  dominantColor() {
+    const counts = new Array(this.colorCount).fill(0);
+    for (const row of this.grid) for (const t of row) if (t && t.color != null) counts[t.color]++;
+    const best = Math.max(...counts);
+    return best > 0 ? counts.indexOf(best) : null;
+  }
+
+  // Swaps that fire without needing a match: a Disco Cat with anything, or two specials.
+  isSpecialSwap(a, b) {
+    const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
+    if (!ta || !tb) return false;
+    return ta.special === "disco" || tb.special === "disco" || Boolean(ta.special && tb.special);
+  }
+
   // Removes the tiles in the given match groups. Returns [{ r, c, tile }] removed.
   clear(groups) {
     const removed = [];
@@ -165,7 +363,7 @@ export class Board {
   // Length of the same-color line through (r, c) in each axis.
   lineAt(r, c) {
     const tile = this.get(r, c);
-    if (!tile) return { h: 0, v: 0 };
+    if (!tile || tile.color == null) return { h: 0, v: 0 };
     const same = (rr, cc) => { const t = this.get(rr, cc); return t && t.color === tile.color; };
     let h = 1, v = 1;
     for (let k = c - 1; same(r, k); k--) h++;
@@ -180,8 +378,9 @@ export class Board {
     return h >= 3 || v >= 3;
   }
 
-  // Would swapping a and b produce a match? Leaves the board unchanged.
+  // Would swapping a and b produce a match (or fire a special swap)? Leaves the board unchanged.
   swapMakesMatch(a, b) {
+    if (this.isSpecialSwap(a, b)) return true;
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
     if (!ta || !tb || ta.color === tb.color) return false;
     this.swap(a, b);
@@ -228,7 +427,7 @@ export class Board {
     }
     // Pathological color mix: recolor everything rather than leave a dead board.
     for (let attempt = 0; attempt < 200; attempt++) {
-      for (const tile of tiles) tile.color = Math.floor(rng() * this.colorCount);
+      for (const tile of tiles) if (tile.color != null) tile.color = Math.floor(rng() * this.colorCount);
       if (this.findMatches().length === 0 && this.hasLegalMove()) return true;
     }
     return false;

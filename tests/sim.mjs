@@ -1,27 +1,28 @@
 // sim.mjs — headless bot that plays a generated level, for calibrating the
 // difficulty curve. Mirrors main.js's resolve loop without animation.
 //   node tests/sim.mjs [fromLevel] [toLevel]
-import { Board, MATCH_POINTS } from "../src/board.js";
+import { Board } from "../src/board.js";
 import { generateLevel } from "../src/generator.js";
 import { mulberry32 } from "../src/rng.js";
 
 // Resolve cascades after a swap; returns points scored.
-export function resolve(board) {
+export function resolve(board, swap) {
   let points = 0;
   for (let cascade = 1; ; cascade++) {
-    const groups = board.findMatches();
-    if (!groups.length) break;
-    for (const g of groups) points += MATCH_POINTS[g.kind] * cascade;
-    board.clear(groups);
+    const step = board.resolveStep(cascade === 1 ? swap : null);
+    if (!step) break;
+    points += step.points * cascade;
     board.collapse();
   }
   if (!board.hasLegalMove()) board.shuffle();
   return points;
 }
 
-// Greedy bot: takes the move with the biggest immediate match (ties → lowest on the board,
-// which is what most humans do to fish for cascades). `botRng` adds a little sloppiness.
-export function playLevel(n, botRng = mulberry32(n * 31 + 7)) {
+// Greedy bot: looks one step ahead (no cascades) and takes the move that scores most
+// right now, plus a bonus for making a special — roughly how a seasoned player reads
+// the board. Ties → lowest on the board (fishing for cascades). `botRng` adds sloppiness.
+const MAKE_BONUS = { zoomie: 120, boom: 160, disco: 300 };
+export function playLevel(n, botRng = mulberry32(n * 31 + 7), target) {
   const lvl = generateLevel(n);
   const board = new Board(lvl.boardShape, lvl.tiles, lvl.colors, mulberry32(lvl.refillSeed));
   let score = 0;
@@ -29,16 +30,16 @@ export function playLevel(n, botRng = mulberry32(n * 31 + 7)) {
     const moves = board.findMoves();
     let best = null, bestValue = -1;
     for (const [a, b] of moves) {
-      board.swap(a, b);
-      const la = board.lineAt(a.r, a.c), lb = board.lineAt(b.r, b.c);
-      board.swap(a, b);
-      const size = [la.h, la.v, lb.h, lb.v].filter((x) => x >= 3).reduce((s, x) => s + x, 0);
-      const value = size * 10 + Math.max(a.r, b.r) + botRng() * 8;
+      const look = board.clone(() => 0);
+      look.swap(a, b);
+      const step = look.resolveStep([a, b]);
+      const made = step.created.reduce((s, c) => s + MAKE_BONUS[c.tile.special], 0);
+      const value = step.points + made + Math.max(a.r, b.r) * 3 + botRng() * 40;
       if (value > bestValue) { bestValue = value; best = [a, b]; }
     }
     board.swap(best[0], best[1]);
-    score += resolve(board);
-    if (score >= lvl.targets.score) return { won: true, score, target: lvl.targets.score, movesLeft: lvl.moves - move - 1 };
+    score += resolve(board, best);
+    if (score >= (target ?? lvl.targets.score)) return { won: true, score, target: lvl.targets.score, movesLeft: lvl.moves - move - 1 };
   }
   return { won: false, score, target: lvl.targets.score, movesLeft: 0 };
 }

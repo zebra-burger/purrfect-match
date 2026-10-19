@@ -75,7 +75,7 @@ const SHAPES = {
 };
 
 // Relative scoring yield of each shape vs. a 9×9 rectangle, measured with tests/sim.mjs.
-const SHAPE_YIELD = { rectangle: 1, diamond: 1.05, donut: 0.85, catHead: 0.86, randomHoles: 0.95 };
+const SHAPE_YIELD = { rectangle: 1, diamond: 0.88, donut: 0.63, catHead: 0.82, randomHoles: 0.74 };
 
 function chooseShape(n, rng) {
   if (n <= 5) return "rectangle";
@@ -106,8 +106,8 @@ export function generateLevel(n) {
   // Points per move a greedy bot averages (tests/sim.mjs): 5 colors cascade far more
   // than 6, and holes/narrow shapes cascade less. The target asks for ~75% of that on
   // a gentle level and ~110% on a spike.
-  const perMove = (colors === 5 ? 400 : 195) * SHAPE_YIELD[shapeName] * (cellCount / 81) ** 0.5;
-  const warmUp = n <= 10 ? 0.7 + 0.03 * (n - 1) : 1; // first ten levels go easy
+  const perMove = (colors === 5 ? 680 : 315) * SHAPE_YIELD[shapeName] * (cellCount / 81) ** 0.5;
+  const warmUp = n <= 10 ? 0.55 + 0.045 * (n - 1) : 1; // first ten levels go easy
   const score = Math.max(1000, Math.round((moves * perMove * (0.75 + 0.35 * d) * warmUp) / 100) * 100);
 
   // Solvability pass: regenerate the opening fill until it has a legal move.
