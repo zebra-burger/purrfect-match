@@ -9,7 +9,7 @@
 //   boosters   earned (never bought) booster counts: { paw, shuffle, moves }
 //   boosterLog lifetime { earned, spent } per booster, so merging two copies (cloud
 //              sync) can't hand back a booster she already used
-//   syncId     random id for automatic cloud backup (cloud.js); cloud = last sync
+//   cloud      when it last backed up to her Google-linked cloud copy (cloud.js)
 //
 // Every storage access is wrapped — private mode or blocked storage must never stop
 // the game from starting. Backups are compressed into a URL-safe code that restores
@@ -49,7 +49,6 @@ function fresh() {
     // One of each to start, so she meets them before she's earned any.
     boosters: { paw: 1, shuffle: 1, moves: 1 },
     boosterLog: { earned: { paw: 1, shuffle: 1, moves: 1 }, spent: { paw: 0, shuffle: 0, moves: 0 } },
-    syncId: null,
     cloud: { lastAt: null, lastLevel: 0 },
     updatedAt: 0,
   };
@@ -83,7 +82,6 @@ function normalize(raw) {
     p.boosterLog.earned[k] = earned;
     p.boosterLog.spent[k] = spent;
   }
-  if (/^[0-9a-f]{32}$/.test(String(raw.syncId || ""))) p.syncId = raw.syncId;
   if (raw.cloud && typeof raw.cloud === "object") Object.assign(p.cloud, raw.cloud);
   if (Number.isFinite(raw.updatedAt)) p.updatedAt = raw.updatedAt;
   return p;
@@ -260,7 +258,6 @@ export function mergeProgress(a, b) {
     out.boosterLog.spent[k] = spent;
     out.boosters[k] = Math.max(0, Math.min(MAX_BOOSTERS, earned - spent));
   }
-  out.syncId = a.syncId || nb.syncId;
   out.cloud.lastAt = Math.max(a.cloud?.lastAt || 0, nb.cloud.lastAt || 0) || null;
   return out;
 }

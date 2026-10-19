@@ -20,9 +20,16 @@ the game files plus the cloud-backup API). The old GitHub Pages address forwards
 ### Saving and backups — nothing to press
 
 - Every level saves on the phone the moment it ends, online or offline.
-- Whenever the phone is online, progress also backs up to the cloud by itself.
-- **New phone:** on the journey map, tap ☁️ → **Send my journey link** once and keep that message.
-  Opening the link on any phone brings the whole journey back.
+- On the journey map, tap ☁️ → **Sign in with Google** once. From then on, whenever the phone is
+  online, progress backs up to the cloud by itself, tied to that Google account.
+- **New phone:** sign in with the same Google account and the whole journey comes back.
+
+### Google sign-in setup
+
+The Google OAuth client id (a public value) goes in two places: `GOOGLE_CLIENT_ID` in
+`src/cloud.js` and in `worker/wrangler.toml` under `[vars]`. Its authorized JavaScript origins are
+`https://orangezebra.cloud` and `http://localhost:8765`. `ALLOWED_EMAILS` in `wrangler.toml` limits
+which Google accounts can back up. The client secret is not used.
 
 ## Development
 

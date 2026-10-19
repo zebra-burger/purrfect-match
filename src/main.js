@@ -69,17 +69,16 @@ const status = titleScreen.querySelector(".status");
 if (status) status.textContent = progress.level > 1 ? `Tap to play level ${fmt(progress.level)}` : "Tap to start your journey";
 
 // ?level=N jumps straight into a level (handy for testing a reported "bad level N");
-// it doesn't unlock anything. A journey link (#sync=<id>) brings her journey to this
-// phone; an older backup link (#restore=<code>) opens the restore prompt.
+// it doesn't unlock anything. An old backup link (#restore=<code>) opens the restore prompt.
 const jump = Number(new URLSearchParams(location.search).get("level"));
 const restoreCode = location.hash.startsWith("#restore=") ? location.hash.slice(9) : null;
-const syncLink = (location.hash.match(/^#sync=([0-9a-f]{32})$/) || [])[1] || null;
-if (restoreCode || syncLink) history.replaceState(null, "", location.pathname + location.search);
+if (restoreCode) history.replaceState(null, "", location.pathname + location.search);
 
-// Cloud backup runs by itself: at start-up, after every level, when the phone comes
-// back online, and when she switches away. Progress always saves on the phone first.
+// Cloud backup (once she's signed in with Google) runs by itself: at start-up, after
+// every level, when the phone comes back online, and when she switches away.
+// Progress always saves on the phone first.
 const cloudSync = () => syncNow(progress).then((r) => journey.synced(r));
-if (!syncLink) cloudSync();
+cloudSync();
 window.addEventListener("online", cloudSync);
 window.addEventListener("offline", () => journey.synced());
 document.addEventListener("visibilitychange", () => { if (document.hidden) cloudSync(); });
@@ -91,10 +90,7 @@ titleScreen.addEventListener("click", () => {
   else showJourney();
 }, { once: true });
 
-if (syncLink) {
-  titleScreen.hidden = true;
-  journey.joinFromLink(syncLink);
-} else if (restoreCode) {
+if (restoreCode) {
   titleScreen.hidden = true;
   journey.restoreFromLink(restoreCode).then((ok) => { if (!ok) showJourney(); });
 }

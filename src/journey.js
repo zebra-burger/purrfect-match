@@ -9,7 +9,7 @@ import {
   PLAYER, saveProgress, starsFor, totalStars, importCode, mergeProgress,
 } from "./storage.js";
 import { generateLevel } from "./generator.js";
-import { journeyLink, joinJourney, syncNow } from "./cloud.js";
+import { account, renderSignIn, signOut, syncNow } from "./cloud.js";
 import { GOAL_ICONS } from "./ui.js";
 
 // Goal icons for a level ("🧶", "🐟📦"…), memoized — levels never change.
@@ -64,6 +64,7 @@ export function milestoneMessage(level) {
 }
 
 const fmt = (n) => Number(n).toLocaleString("en-US");
+const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
 const ROW = 92;          // px per level on the trail
 const BANNER = 74;       // px per world banner
@@ -114,8 +115,8 @@ export function createJourney({ progress, onPlay, catSvg }) {
     // The cloud copy is automatic; the one thing she has to do once is keep her
     // journey link somewhere (it's how a new phone finds her progress).
     const reminder = $(".j-reminder");
-    reminder.hidden = !(progress.level > 10 && !progress.backup.lastAt);
-    reminder.textContent = "💌 Send yourself your journey link — it's how a new phone finds your progress";
+    reminder.hidden = !(progress.level > 3 && !account());
+    reminder.textContent = "☁️ Sign in with Google to keep your journey safe";
     renderCloud();
   }
 
@@ -131,9 +132,9 @@ export function createJourney({ progress, onPlay, catSvg }) {
 
   function cloudText() {
     const c = progress.cloud;
-    const upToDate = c.lastAt && c.lastLevel >= progress.level;
+    if (!account()) return "📱 Saved on this phone · sign in to back up";
     if (navigator.onLine === false) return "📱 Saved on this phone · backs up when you're online";
-    if (upToDate) return `☁️ Backed up ${ago(c.lastAt)}`;
+    if (c.lastAt && c.lastLevel >= progress.level) return `☁️ Backed up ${ago(c.lastAt)}`;
     return "📱 Saved on this phone · backing up…";
   }
 
@@ -236,96 +237,58 @@ export function createJourney({ progress, onPlay, catSvg }) {
       ${next ? `<p class="j-next">Next milestone: <b>level ${fmt(next)}</b>${next === CANDY_LEVEL ? " — your Candy Crush level 🍬" : ""}, ${fmt(next - progress.level + 1)} to go</p>` : ""}`);
   }
 
-  function linkSentText() {
-    const b = progress.backup;
-    return b.lastAt ? `Journey link sent ${ago(b.lastAt)}.` : "You haven't sent your journey link yet.";
-  }
-
   function openBackup() {
-    openSheet(`
+    const me = account();
+    openSheet(me ? `
       <h2>Your journey is safe 💕</h2>
-      <p>Every level saves on this phone straight away — no button to press, online or
-        offline — and backs up to the cloud by itself whenever you're online.</p>
+      <p>Every level saves on this phone straight away — no button to press — and backs
+        up to the cloud by itself whenever you're online.</p>
       <p class="j-status" data-cloud-status>${cloudText()}</p>
-      <p>Getting a new phone? Open your journey link on it and everything comes back.</p>
-      <button type="button" class="j-btn" data-send>Send my journey link</button>
-      <p class="j-small" data-last>${linkSentText()}</p>
+      <p>Signed in as <b>${escapeHtml(me.email)}</b>. Getting a new phone? Just sign in
+        with Google there and everything comes back.</p>
+      <button type="button" class="j-link" data-signout>Sign out of this phone</button>`
+    : `
+      <h2>Keep your journey safe 💕</h2>
+      <p>Every level already saves on this phone — no button to press, online or offline.</p>
+      <p>Sign in with Google and it also backs up to the cloud by itself. On a new phone,
+        sign in again and everything comes back.</p>
+      <div class="j-google" data-google></div>
+      <p class="j-small" data-msg></p>
       <details class="j-restore">
-        <summary>Bring back a journey</summary>
-        <p class="j-small">Easiest: open the link on this phone. Or paste it here:</p>
-        <textarea rows="3" placeholder="Paste your journey link"></textarea>
+        <summary>Bring back an old backup link</summary>
+        <textarea rows="3" placeholder="Paste the backup link"></textarea>
         <button type="button" class="j-btn secondary" data-restore>Bring it back</button>
-        <p class="j-small" data-msg></p>
+        <p class="j-small" data-restore-msg></p>
       </details>`);
 
-    sheetCard.querySelector("[data-send]").addEventListener("click", sendLink);
+    if (me) {
+      sheetCard.querySelector("[data-signout]").addEventListener("click", async () => {
+        await signOut();
+        renderHeader();
+        openBackup();
+      });
+      syncNow(progress).then(renderCloud);
+      return;
+    }
+    renderSignIn(sheetCard.querySelector("[data-google]"), progress, (result) => {
+      if (!result.ok) {
+        const msg = sheetCard.querySelector("[data-msg]");
+        if (msg) msg.textContent = result.error || "Couldn't reach the cloud — your progress is still safe on this phone.";
+        return;
+      }
+      if (result.pulled) return welcomeBack();
+      renderHeader();
+      openSheet(`<h2>All set! ☁️</h2><p>Your journey now backs up by itself, ${PLAYER}.</p>
+        <button type="button" class="j-btn" data-ok>Back to the map</button>`);
+      sheetCard.querySelector("[data-ok]").addEventListener("click", closeSheet);
+    });
     sheetCard.querySelector("[data-restore]").addEventListener("click", async () => {
       const text = sheetCard.querySelector("textarea").value.trim();
-      const msg = sheetCard.querySelector("[data-msg]");
-      const sync = text.match(/#sync=([0-9a-f]{32})/);
-      if (sync) return offerJoin(sync[1]);
       try {
         offerRestore(await importCode(text));
       } catch {
-        msg.textContent = "Hmm, that doesn't look like a journey link. 🙀";
+        sheetCard.querySelector("[data-restore-msg]").textContent = "Hmm, that doesn't look like a backup link. 🙀";
       }
-    });
-  }
-
-  async function sendLink() {
-    const button = sheetCard.querySelector("[data-send]");
-    syncNow(progress).then(renderCloud); // make sure the cloud copy is fresh
-    const url = journeyLink(progress);
-    const text = `${PLAYER}'s Purrfect Match journey 💕 Open this link on any phone to carry on:`;
-    let sent = false;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "Purrfect Match journey link", text, url });
-        sent = true;
-      }
-    } catch (err) {
-      if (err && err.name === "AbortError") return; // she closed the share sheet
-    }
-    if (!sent) {
-      try {
-        await navigator.clipboard.writeText(`${text} ${url}`);
-        button.textContent = "Copied! Paste it somewhere safe 💌";
-        sent = true;
-      } catch {
-        button.textContent = "Couldn't share — try again";
-      }
-    }
-    if (sent) {
-      progress.backup = { lastLevel: progress.level, lastAt: Date.now() };
-      saveProgress(progress);
-      sheetCard.querySelector("[data-last]").textContent = linkSentText();
-      renderHeader();
-    }
-  }
-
-  // A journey link (#sync=<id>): adopt that id and pull the cloud copy down.
-  function offerJoin(id) {
-    openSheet(`
-      <h2>Bring back your journey?</h2>
-      <p>This phone will join your journey and pick up where you left off.</p>
-      <p class="j-small">Anything already played on this phone is kept too.</p>
-      <button type="button" class="j-btn" data-yes>Yes, bring it back</button>
-      <button type="button" class="j-btn secondary" data-no>Not now</button>
-      <p class="j-small" data-msg></p>`);
-    sheetCard.querySelector("[data-no]").addEventListener("click", closeSheet);
-    const yes = sheetCard.querySelector("[data-yes]");
-    yes.addEventListener("click", async () => {
-      yes.disabled = true;
-      yes.textContent = "Fetching…";
-      const result = await joinJourney(progress, id);
-      if (!result.ok) {
-        yes.disabled = false;
-        yes.textContent = "Try again";
-        sheetCard.querySelector("[data-msg]").textContent =
-          "Couldn't reach the cloud — check you're online and try again.";
-        return;
-      }
-      welcomeBack();
     });
   }
 
@@ -372,12 +335,7 @@ export function createJourney({ progress, onPlay, catSvg }) {
       if (root.hidden) return;
       if (pulled) refresh(); else renderCloud();
     },
-    // Called at boot when the page was opened from a journey link (#sync=<id>).
-    joinFromLink(id) {
-      root.hidden = false;
-      refresh();
-      offerJoin(id);
-    },
+
     // Called at boot when the page was opened from a backup link.
     async restoreFromLink(code) {
       try {
