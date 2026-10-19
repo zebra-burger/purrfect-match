@@ -11,7 +11,7 @@ const OUTLINE = "#3a2e2a";
 const PINK = "#ff9fb4";
 const BLUSH = "rgba(255, 105, 170, 0.42)";
 
-export const CATS = ["Ginger", "Tuxedo", "Siamese", "Grey Tabby", "Calico", "Black Cat"];
+export const CATS = ["Ginger", "Tuxedo", "Siamese", "Tabby", "Calico", "Black Cat"];
 
 // --- Easing --------------------------------------------------------------------
 
@@ -120,93 +120,95 @@ function stripes(ctx, lines, color, width = 4) {
   ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round"; ctx.stroke();
 }
 
+// Six bright, evenly spaced colours (orange, blue, yellow, green, pink, violet) so every
+// cat reads at a glance by colour, and its own shape (stripes, bow tie, big ears, square
+// head, folded ear, curly tail) tells them apart as well.
 const DRAW_CAT = [
-  // 0 — Ginger: round head, tall pointy ears, forehead + cheek stripes, green eyes.
+  // 0 — Ginger · orange: round head, tall pointy ears, forehead + cheek stripes, green eyes.
   (ctx) => {
-    ears(ctx, [16, 42, 20, 6, 46, 26], [23, 34, 24, 16, 38, 27], "#ff9d42");
-    ellipse(ctx, 50, 57, 37, 33); shape(ctx, "#ff9d42");
+    ears(ctx, [16, 42, 20, 6, 46, 26], [23, 34, 24, 16, 38, 27], "#ff7a00");
+    ellipse(ctx, 50, 57, 37, 33); shape(ctx, "#ff7a00");
     stripes(ctx, [[50, 26, 50, 36], [40, 28, 42, 36], [60, 28, 58, 36],
-      [14, 56, 25, 58], [15, 64, 25, 64], [86, 56, 75, 58], [85, 64, 75, 64]], "#d9661c");
-    ellipse(ctx, 43, 70, 9, 7); shape(ctx, "#ffe2c2", null);
-    ellipse(ctx, 57, 70, 9, 7); shape(ctx, "#ffe2c2", null);
-    eyes(ctx, 52, 14, "#7cc84d");
+      [14, 56, 25, 58], [15, 64, 25, 64], [86, 56, 75, 58], [85, 64, 75, 64]], "#c84a00");
+    ellipse(ctx, 43, 70, 9, 7); shape(ctx, "#ffe0b8", null);
+    ellipse(ctx, 57, 70, 9, 7); shape(ctx, "#ffe0b8", null);
+    eyes(ctx, 52, 14, "#5fd23a");
     blush(ctx, 64);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 70);
   },
-  // 1 — Tuxedo: wide black head, white blaze + muzzle, red bow tie below the chin.
+  // 1 — Tuxedo · sky blue: wide head, white blaze + muzzle, pink bow tie below the chin.
   (ctx) => {
-    ears(ctx, [14, 46, 20, 14, 42, 28], [21, 38, 23, 22, 36, 30], "#2b2b35", "#d47b93");
-    ellipse(ctx, 50, 55, 39, 31); shape(ctx, "#2b2b35");
+    ears(ctx, [14, 46, 20, 14, 42, 28], [21, 38, 23, 22, 36, 30], "#2a86ff", "#ffb3d1");
+    ellipse(ctx, 50, 55, 39, 31); shape(ctx, "#2a86ff");
     tri(ctx, 50, 30, 41, 62, 59, 62); shape(ctx, "#fff", null);
     ellipse(ctx, 50, 69, 18, 13); shape(ctx, "#fff", null);
-    eyes(ctx, 51, 16, "#c9e34b");
+    eyes(ctx, 51, 16, "#ffd23f");
     blush(ctx, 66, 20);
-    nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 70, "#8a8a99");
-    tri(ctx, 34, 81, 34, 97, 50, 89); shape(ctx, "#ff5fa2");
-    tri(ctx, 66, 81, 66, 97, 50, 89); shape(ctx, "#ff5fa2");
-    ellipse(ctx, 50, 89, 4.5, 4.5); shape(ctx, "#e0337f", OUTLINE, 2);
+    nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 70, "#1b4fa0");
+    tri(ctx, 34, 81, 34, 97, 50, 89); shape(ctx, "#ff4fa8");
+    tri(ctx, 66, 81, 66, 97, 50, 89); shape(ctx, "#ff4fa8");
+    ellipse(ctx, 50, 89, 4.5, 4.5); shape(ctx, "#d61f7a", OUTLINE, 2);
   },
-  // 2 — Siamese: wedge head, huge dark ears, chocolate mask, blue almond eyes.
+  // 2 — Siamese · sunshine yellow: wedge head, huge ears, golden mask, blue almond eyes.
   (ctx) => {
-    ears(ctx, [10, 50, 8, 4, 44, 26], [17, 40, 15, 16, 35, 29], "#6b4a3a", "#c99a85");
+    ears(ctx, [10, 50, 8, 4, 44, 26], [17, 40, 15, 16, 35, 29], "#e0a100", "#fff3b0");
     ctx.beginPath();
     ctx.moveTo(50, 92);
     ctx.bezierCurveTo(30, 90, 14, 72, 15, 52);
     ctx.bezierCurveTo(16, 32, 32, 22, 50, 22);
     ctx.bezierCurveTo(68, 22, 84, 32, 85, 52);
     ctx.bezierCurveTo(86, 72, 70, 90, 50, 92);
-    shape(ctx, "#f4e6cc");
-    ellipse(ctx, 50, 68, 17, 19); shape(ctx, "#8a6450", null);
-    eyes(ctx, 50, 16, "#4fa8ff", { rx: 8, ry: 5.5, tilt: 0.25 });
+    shape(ctx, "#ffd60a");
+    ellipse(ctx, 50, 68, 17, 19); shape(ctx, "#e89a00", null);
+    eyes(ctx, 50, 16, "#2f8cff", { rx: 8, ry: 5.5, tilt: 0.25 });
     blush(ctx, 62, 25);
-    nose(ctx, 62, "#3a2620"); mouth(ctx, 66, "#2a1a14"); whiskers(ctx, 72, "#f4e6cc");
+    nose(ctx, 62, "#8a4b00"); mouth(ctx, 66, "#6b3a00"); whiskers(ctx, 72, "#8a5a00");
   },
-  // 3 — Grey Tabby: wide squarish head, small round ears, "M" brow, amber eyes.
+  // 3 — Tabby · mint green: wide squarish head, small round ears, "M" brow, amber eyes.
   (ctx) => {
-    ears(ctx, [12, 40, 20, 16, 38, 28], [19, 35, 22, 22, 32, 30], "#a3adb8");
-    ctx.beginPath(); ctx.roundRect(7, 26, 86, 62, 28); shape(ctx, "#a3adb8");
+    ears(ctx, [12, 40, 20, 16, 38, 28], [19, 35, 22, 22, 32, 30], "#1fcf6e");
+    ctx.beginPath(); ctx.roundRect(7, 26, 86, 62, 28); shape(ctx, "#1fcf6e");
     ctx.beginPath();
     ctx.moveTo(36, 39); ctx.lineTo(41, 30); ctx.lineTo(50, 38); ctx.lineTo(59, 30); ctx.lineTo(64, 39);
-    ctx.strokeStyle = "#66717e"; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.stroke();
-    stripes(ctx, [[9, 52, 21, 54], [9, 61, 21, 61], [91, 52, 79, 54], [91, 61, 79, 61]], "#66717e");
-    ellipse(ctx, 42, 70, 10, 8); shape(ctx, "#f2f4f7", null);
-    ellipse(ctx, 58, 70, 10, 8); shape(ctx, "#f2f4f7", null);
+    ctx.strokeStyle = "#0e8a45"; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.stroke();
+    stripes(ctx, [[9, 52, 21, 54], [9, 61, 21, 61], [91, 52, 79, 54], [91, 61, 79, 61]], "#0e8a45");
+    ellipse(ctx, 42, 70, 10, 8); shape(ctx, "#eafff2", null);
+    ellipse(ctx, 58, 70, 10, 8); shape(ctx, "#eafff2", null);
     eyes(ctx, 52, 17, "#ffb12e");
     blush(ctx, 63, 28);
     nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 71);
   },
-  // 4 — Calico: white round head, orange + black patches, one folded ear.
+  // 4 — Calico · hot pink: round head with white and berry patches, one folded ear.
   (ctx) => {
-    tri(ctx, 15, 44, 19, 8, 44, 26); shape(ctx, "#f29a4a");
-    tri(ctx, 22, 36, 23, 18, 37, 28); shape(ctx, PINK, null);
-    tri(ctx, 58, 26, 92, 20, 84, 46); shape(ctx, "#3b3536");   // folded ear tips outward
+    tri(ctx, 15, 44, 19, 8, 44, 26); shape(ctx, "#ff3fa0");
+    tri(ctx, 22, 36, 23, 18, 37, 28); shape(ctx, "#ffd0e6", null);
+    tri(ctx, 58, 26, 92, 20, 84, 46); shape(ctx, "#b0126a");   // folded ear tips outward
     ctx.save();
     ellipse(ctx, 50, 57, 36, 34);
-    shape(ctx, "#fffaf2", null);
+    shape(ctx, "#ff3fa0", null);
     ctx.clip();
-    ellipse(ctx, 30, 40, 22, 19); shape(ctx, "#f29a4a", null);
-    ellipse(ctx, 74, 38, 19, 16); shape(ctx, "#3b3536", null);
-    ellipse(ctx, 68, 86, 14, 9); shape(ctx, "#f29a4a", null);
+    ellipse(ctx, 30, 40, 22, 19); shape(ctx, "#ffffff", null);
+    ellipse(ctx, 74, 38, 19, 16); shape(ctx, "#b0126a", null);
+    ellipse(ctx, 50, 74, 16, 11); shape(ctx, "#ffffff", null);
     ctx.restore();
     ellipse(ctx, 50, 57, 36, 34); shape(ctx, "transparent");
-    eyes(ctx, 52, 15, "#5cb85c");
-    blush(ctx, 64);
-    nose(ctx, 63); mouth(ctx, 66); whiskers(ctx, 71);
+    eyes(ctx, 52, 15, "#5fd23a");
+    nose(ctx, 63, "#fff"); mouth(ctx, 66); whiskers(ctx, 71, "#7a0b48");
   },
-  // 5 — Black Cat: curled tail, tall tufted ears, big yellow slit eyes.
+  // 5 — Black Cat · violet: curled tail, tall tufted ears, big yellow slit eyes.
   (ctx) => {
     ctx.beginPath();
     ctx.moveTo(70, 88); ctx.bezierCurveTo(96, 92, 100, 62, 88, 50);
     ctx.bezierCurveTo(82, 44, 92, 36, 96, 42);
     ctx.lineCap = "round";
     ctx.strokeStyle = OUTLINE; ctx.lineWidth = 13; ctx.stroke();
-    ctx.strokeStyle = "#34304a"; ctx.lineWidth = 8; ctx.stroke();
-    ears(ctx, [18, 44, 14, 2, 44, 26], [24, 36, 21, 14, 37, 29], "#34304a", "#a46a8d");
-    stripes(ctx, [[17, 6, 13, 0], [83, 6, 87, 0]], "#34304a", 3);
-    ellipse(ctx, 50, 58, 35, 32); shape(ctx, "#34304a");
-    eyes(ctx, 54, 15, "#ffd23f", { rx: 10, ry: 11, slit: true });
+    ctx.strokeStyle = "#8a3dff"; ctx.lineWidth = 8; ctx.stroke();
+    ears(ctx, [18, 44, 14, 2, 44, 26], [24, 36, 21, 14, 37, 29], "#8a3dff", "#d9b8ff");
+    stripes(ctx, [[17, 6, 13, 0], [83, 6, 87, 0]], "#8a3dff", 3);
+    ellipse(ctx, 50, 58, 35, 32); shape(ctx, "#8a3dff");
+    eyes(ctx, 54, 15, "#ffe23f", { rx: 10, ry: 11, slit: true });
     blush(ctx, 68, 26);
-    nose(ctx, 66, "#ff8fb0"); mouth(ctx, 69, "#a99cc7"); whiskers(ctx, 72, "#a99cc7");
+    nose(ctx, 66, "#ff8fc0"); mouth(ctx, 69, "#3d1480"); whiskers(ctx, 72, "#e6d6ff");
   },
 ];
 
