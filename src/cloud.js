@@ -56,11 +56,15 @@ export function syncNow(progress) {
       let pulled = false;
       const res = await request(SYNC_URL + id);
       if (res.status === 200) {
-        const remote = await res.json();
-        const theirs = await importCode(remote.code);
-        const before = progress.level;
-        Object.assign(progress, mergeProgress(progress, theirs), { syncId: id });
-        pulled = progress.level > before;
+        // A cloud copy that won't decode (damaged, or tampered with by someone holding
+        // the link) is ignored and overwritten with this phone's progress below.
+        let theirs = null;
+        try { theirs = await importCode((await res.json()).code); } catch { theirs = null; }
+        if (theirs) {
+          const before = progress.level;
+          Object.assign(progress, mergeProgress(progress, theirs), { syncId: id });
+          pulled = progress.level > before;
+        }
       } else if (res.status !== 204 && res.status !== 404) {
         return { ok: false };
       }
