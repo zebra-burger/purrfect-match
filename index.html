@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ff8a5c">
+  <title>Purrfect Match</title>
+  <meta name="description" content="A cat-themed match-3 game with limitless levels.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div id="title-screen">
+    <div class="cat-mark" aria-hidden="true">
+      <svg viewBox="0 0 120 120" width="140" height="140">
+        <path d="M22 38 L14 10 L40 24 Z" fill="#ff8a5c"/>
+        <path d="M98 38 L106 10 L80 24 Z" fill="#ff8a5c"/>
+        <circle cx="60" cy="62" r="44" fill="#ff8a5c"/>
+        <circle cx="44" cy="56" r="6" fill="#3a2e2a"/>
+        <circle cx="76" cy="56" r="6" fill="#3a2e2a"/>
+        <path d="M54 72 Q60 78 66 72" stroke="#3a2e2a" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M60 66 L56 71 L64 71 Z" fill="#3a2e2a"/>
+      </svg>
+    </div>
+    <h1>Purrfect Match</h1>
+    <p class="tagline">Limitless levels. Infinite cats.</p>
+    <p class="status">Coming soon to this phone 🐾</p>
+  </div>
+
+  <canvas id="game" hidden></canvas>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

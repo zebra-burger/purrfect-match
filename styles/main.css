@@ -1,0 +1,61 @@
+:root {
+  --bg: #fff4ec;
+  --bg-deep: #ffe3d0;
+  --ink: #3a2e2a;
+  --accent: #ff8a5c;
+  --accent-deep: #e9653a;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: "Baloo 2", "Comic Sans MS", system-ui, sans-serif;
+  background: radial-gradient(circle at 50% 20%, var(--bg) 0%, var(--bg-deep) 100%);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#title-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+}
+
+.cat-mark { animation: bob 2.4s ease-in-out infinite; }
+
+h1 {
+  font-size: clamp(2.2rem, 9vw, 3.4rem);
+  color: var(--accent-deep);
+  letter-spacing: 0.5px;
+}
+
+.tagline { font-size: 1.15rem; opacity: 0.8; }
+
+.status {
+  margin-top: 28px;
+  font-size: 0.95rem;
+  background: #ffffffaa;
+  border-radius: 999px;
+  padding: 10px 20px;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
