@@ -54,6 +54,8 @@ const game = {
   over: false,
   abandoned: false,
   hintTimer: 0,
+  dialogTimer: 0,
+  bonusMoves: 0,   // moves added by +5 boosters (they don't count towards stars)
   aiming: false,   // Paw Swipe armed: the next tap on the board swipes that cat away
   catsRecorded: 0, // cats already counted in her stats (an Out of moves → +5 Moves rescue)
 };
@@ -99,6 +101,7 @@ function showJourney() {
   if (game.lvl && !game.over) game.abandoned = true;
   game.over = true;
   clearTimeout(game.hintTimer);
+  clearTimeout(game.dialogTimer);
   if (input) input.clearSelection();
   ui.hideDialog();
   ui.hideHud();
@@ -126,7 +129,7 @@ function playLevel(n) {
         return true;
       },
     });
-    window.addEventListener("resize", () => renderer.layout(ui.hudBottom(), tray.top()));
+    window.addEventListener("resize", () => { renderer.layout(ui.hudBottom(), tray.top()); placeToast(); });
     if (isLocal) window.purrfect = { game, renderer, progress, startLevel: playLevel, showJourney }; // dev/test handle
   }
   startLevel(n);
@@ -138,6 +141,7 @@ function startLevel(n) {
   const { boardShape, tiles, colors, refillSeed, moves, blockers } = game.lvl;
   game.board = new Board(boardShape, tiles, colors, mulberry32(refillSeed), blockers);
   game.movesLeft = moves;
+  game.bonusMoves = 0;
   game.score = 0;
   game.cats = 0;
   game.bestCascade = 0;
@@ -151,6 +155,7 @@ function startLevel(n) {
   updateHud();
   renderer.setBoard(game.board);
   renderer.layout(ui.hudBottom(), tray.top());
+  placeToast();
   ui.toast(...goalText(game.lvl));
   armHint();
 }
@@ -170,6 +175,14 @@ function goalText({ objective, targets }) {
     else if (targets.boxes) tip = "Match next to a box to open it";
   }
   return [parts.join(" + "), tip];
+}
+
+// Callouts sit in the gap between the HUD and the board when there's room, so the
+// level's goal never covers the cats she's about to play.
+function placeToast() {
+  const gap = renderer.oy - ui.hudBottom();
+  const y = gap >= 96 ? ui.hudBottom() + gap / 2 : renderer.oy + renderer.ts * 1.5;
+  document.documentElement.style.setProperty("--toast-y", `${Math.round(y)}px`);
 }
 
 function updateHud() {
@@ -205,6 +218,7 @@ function useBoosterNow(kind) {
     if (!useBooster(progress, "moves")) return;
     saveProgress(progress);
     game.movesLeft += 5;
+    game.bonusMoves += 5;
     sfx.sparkle();
     ui.toast("+5 moves! ➕");
     updateHud();
@@ -360,7 +374,8 @@ function finish(won) {
   const level = game.level;
   const target = game.lvl.targets.score;
   const result = recordResult(progress, {
-    level, won, score: game.score, movesLeft: game.movesLeft, moves: game.lvl.moves,
+    // Stars come from the level's own moves to spare; +5 Moves boosters don't count.
+    level, won, score: game.score, movesLeft: Math.max(0, game.movesLeft - game.bonusMoves), moves: game.lvl.moves,
     cats: game.cats - game.catsRecorded, bestCascade: game.bestCascade,
   });
   game.catsRecorded = game.cats;
@@ -378,10 +393,10 @@ function finish(won) {
       || (result.improved ? `New best on this level — ${result.stars} stars! 🌟` : null)
       || (result.newBest ? `Your highest score ever, ${PLAYER}! 🏅` : null);
     const gift = earnedText(result.earned);
-    setTimeout(() => ui.showDialog({
+    game.dialogTimer = setTimeout(() => ui.showDialog({
       title: titles[result.stars - 1],
       body: `Level ${fmt(level)} done with ${fmt(game.score)} points and ${spare} to spare.`,
-      ribbon: [ribbon, gift].filter(Boolean).join(" ") || null,
+      ribbon: [ribbon, gift].filter(Boolean).join("\n") || null,
       stars: result.stars,
       win: true,
       actions: [toMap, { label: "Next level", onClick: () => playLevel(level + 1) }],
@@ -404,19 +419,29 @@ function finish(won) {
         onClick: () => keepGoing(),
       });
     }
-    setTimeout(() => ui.showDialog({ title: "Out of moves", body, actions }), 350);
+    game.dialogTimer = setTimeout(() => ui.showDialog({ title: "Out of moves", body, actions }), 350);
   }
 }
 
 // "Out of moves" → spend a +5 Moves booster and carry on from the same board.
-function keepGoing() {
+async function keepGoing() {
   if (!useBooster(progress, "moves")) return;
   saveProgress(progress);
   game.movesLeft += 5;
+  game.bonusMoves += 5;
   game.over = false;
-  game.busy = false;
   sfx.sparkle();
   ui.toast("+5 moves! You've got this 💕");
+  updateHud();
+  // The last move may have left no swap at all; never hand back a dead board.
+  if (!game.board.hasLegalMove()) {
+    game.busy = true;
+    game.board.shuffle();
+    await renderer.animateShuffle();
+    await resolveCascades();
+    if (game.abandoned) return;
+  }
+  game.busy = false;
   updateHud();
   armHint();
 }

@@ -285,7 +285,8 @@ export class Board {
           // Disco + Disco: the whole board.
           consumed.add(other.id);
           blasts.push({ special: "disco", r: dp.r, c: dp.c, targets: cellsWhere(() => true) });
-          cellsWhere(() => true).forEach(({ r, c }) => mark(r, c));
+          for (let r = 0; r < this.rows; r++)
+            for (let c = 0; c < this.cols; c++) if (this.exists(r, c)) mark(r, c); // boxes too
         } else {
           // Disco + cat: every cat of that color. Disco + Zoomie/Boom: they all turn
           // into that special first, then go off.
@@ -573,9 +574,14 @@ export class Board {
   // Rearranges existing tiles until there are no standing matches and at least one move.
   // Returns true on success (the tiles keep their ids, so the renderer can slide them).
   shuffle(rng = this.rng) {
+    // Fish treats and sleeping cats stay where they are: a shuffle mustn't drop a fish
+    // onto the bottom row for free or move a sleeping cat.
     const cells = [];
     for (let r = 0; r < this.rows; r++)
-      for (let c = 0; c < this.cols; c++) if (this.grid[r][c]) cells.push({ r, c });
+      for (let c = 0; c < this.cols; c++) {
+        const t = this.grid[r][c];
+        if (t && !CARGO.has(t.special)) cells.push({ r, c });
+      }
     const tiles = cells.map(({ r, c }) => this.grid[r][c]);
     for (let attempt = 0; attempt < 200; attempt++) {
       for (let i = tiles.length - 1; i > 0; i--) {

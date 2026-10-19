@@ -217,7 +217,7 @@ h1 {
   text-shadow: 0 3px 0 #fff;
 }
 
-#overlay:not(.win) .card::before { content: "🐾"; font-size: 36px; top: -22px; }
+#overlay:not(.win) .card::before { content: "😿"; font-size: 40px; top: -24px; text-shadow: none; }
 
 #overlay h2 {
   font-size: 2.1rem;
@@ -241,6 +241,7 @@ h1 {
   background: #ffe8f2;
   border-radius: 14px;
   padding: 10px 14px;
+  white-space: pre-line;
 }
 
 .dialog-stars { display: flex; justify-content: center; gap: 6px; margin: -4px 0 6px; }
@@ -311,7 +312,7 @@ h1 {
 #toast {
   position: fixed;
   left: 50%;
-  top: 34%;
+  top: var(--toast-y, 34%);
   transform: translate(-50%, -50%);
   z-index: 3;
   width: max-content;

@@ -830,6 +830,15 @@ export class Renderer {
 
   loop(now) {
     requestAnimationFrame(this.loop);
+    // Nothing to draw while the journey map is showing: save the battery. Animations
+    // still finish (an abandoned level's cascade must settle), they just aren't drawn.
+    if (this.canvas.hidden) {
+      for (const a of this.anims) if (now >= a.start) { a.step(a.easing(1)); a.resolve(); }
+      this.anims = this.anims.filter((a) => now < a.start);
+      this.particles.length = 0;
+      this.lastNow = now;
+      return;
+    }
     const dt = Math.min(0.05, (now - (this.lastNow || now)) / 1000);
     this.lastNow = now;
     for (const p of this.particles) {

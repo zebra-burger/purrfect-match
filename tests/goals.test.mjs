@@ -111,3 +111,22 @@ test("clones copy the goal layers", () => {
   assert.equal(c.yarnLeft(), 0);
   assert.equal(c.boxesLeft(), 0);
 });
+
+test("a shuffle leaves fish treats where they are", () => {
+  const b = boardFrom(["F123", "2341", "3412", "4123"], { fishTotal: 1 });
+  for (let seed = 1; seed <= 20; seed++) {
+    b.shuffle(mulberry32(seed));
+    assert.equal(b.grid[0][0].special, "fish", `seed ${seed}`);
+  }
+});
+
+test("Disco + Disco also knocks every box", () => {
+  const b = boardFrom(["1234b", "34123", "2b341"]);
+  b.grid[1][1].special = "disco"; b.grid[1][1].color = null;
+  b.grid[1][2].special = "disco"; b.grid[1][2].color = null;
+  const a = { r: 1, c: 1 }, d = { r: 1, c: 2 };
+  b.swap(a, d);
+  const step = b.resolveStep([a, d]);
+  assert.equal(step.boxHits.length, 2);
+  assert.equal(b.boxesLeft(), 0);
+});
