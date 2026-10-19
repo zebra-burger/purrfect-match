@@ -30,7 +30,11 @@ const HINT_DELAY_MS = 6000;
 
 const titleScreen = document.getElementById("title-screen");
 const canvas = document.getElementById("game");
-const ui = createUI({ onMap: () => showJourney() });
+const ui = createUI({
+  onMap: () => showJourney(),
+  muted: isMuted(),
+  onToggleMute: () => { setMuted(!isMuted()); unlockAudio(); sfx.pop(1); return isMuted(); },
+});
 let renderer = null;
 let input = null;
 
@@ -97,7 +101,7 @@ function playLevel(n) {
   if (!renderer) {
     renderer = new Renderer(canvas);
     canvas.addEventListener("pointerdown", unlockAudio); // iOS can re-suspend audio
-  input = attachInput(canvas, renderer, {
+    input = attachInput(canvas, renderer, {
       canInteract: () => !game.busy && !game.over,
       onSelect: (cell) => { renderer.selected = cell; armHint(); },
       onSwap: (a, b) => playSwap(a, b),
@@ -183,18 +187,35 @@ async function playSwap(a, b) {
 }
 
 // Clear → fall → refill, repeating while new matches form. Each cascade step
-// multiplies the points, so chain reactions are worth chasing.
-async function resolveCascades() {
+// multiplies the points, so chain reactions are worth chasing. `swap` (the move just
+// made) decides where new specials land and fires special swaps on the first step.
+async function resolveCascades(swap = null) {
   const { board } = game;
   for (let cascade = 1; ; cascade++) {
-    const groups = board.findMatches();
-    if (!groups.length) return;
+    const step = board.resolveStep(cascade === 1 ? swap : null);
+    if (!step) return;
     game.bestCascade = Math.max(game.bestCascade, cascade);
-    for (const g of groups) { game.score += MATCH_POINTS[g.kind] * cascade; game.cats += g.cells.length; }
+    game.score += step.points * cascade;
+    game.cats += step.removed.length;
     updateHud();
-    await renderer.animateClear(board.clear(groups));
+    playStepSounds(step, cascade);
+    if (cascade >= 2) {
+      renderer.comboText(cascade - 1);
+      if (cascade <= 4) sfx.combo(cascade - 1);
+    }
+    await renderer.animateStep(step);
     await renderer.animateCollapse(board.collapse());
   }
+}
+
+function playStepSounds({ blasts, created }, cascade) {
+  sfx.pop(cascade);
+  const kinds = new Set(blasts.map((b) => b.special));
+  if (kinds.has("disco")) sfx.disco();
+  if (kinds.has("boom")) sfx.boom();
+  if (kinds.has("zoomie")) sfx.zoomie();
+  if (created.length) sfx.sparkle();
+  buzz(blasts.length ? 35 : cascade > 1 ? 18 : 12);
 }
 
 function finish(won) {
@@ -212,6 +233,8 @@ function finish(won) {
   const toMap = { label: "Map", secondary: true, onClick: showJourney };
 
   if (won) {
+    sfx.win();
+    buzz([30, 60, 30]);
     const titles = ["Purrfect!", "Pawsome!", "Meow-velous!"];
     const spare = game.movesLeft === 1 ? "1 move" : `${game.movesLeft} moves`;
     const ribbon = (result.firstWin && milestoneMessage(level))
