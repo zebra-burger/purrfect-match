@@ -23,7 +23,14 @@ No build step. Serve the folder and open it:
 python3 -m http.server 8000
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://localhost:8000`. Add `?level=N` to jump straight to level N.
+
+Tests and difficulty calibration use plain Node (no install):
+
+```bash
+node --test tests/*.test.mjs
+node tests/sim.mjs 1 1000   # greedy-bot win rate across a level range
+```
 
 ## Project docs
 
@@ -32,4 +39,5 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-🚧 Scaffolded — core game in progress. See milestones in [PLAN.md](PLAN.md).
+🐾 **M1 playable core** — endless seeded levels, swipe/tap swapping, cascades, score targets,
+win/fail and saved level. Next up: M2 juice (sounds, particles, combos). See [PLAN.md](PLAN.md).

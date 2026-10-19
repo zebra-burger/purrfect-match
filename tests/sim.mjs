@@ -43,7 +43,7 @@ export function playLevel(n, botRng = mulberry32(n * 31 + 7)) {
   return { won: false, score, target: lvl.targets.score, movesLeft: 0 };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (typeof process !== "undefined" && import.meta.url === `file://${process.argv[1]}`) {
   const from = Number(process.argv[2] || 1), to = Number(process.argv[3] || 100);
   let wins = 0;
   const buckets = {};

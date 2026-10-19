@@ -1,6 +1,6 @@
 // Service worker: caches the whole game for offline play.
 // Bump CACHE_VERSION on every release so installed phones pick up updates.
-const CACHE_VERSION = "purrfect-v0.1.0";
+const CACHE_VERSION = "purrfect-v0.2.0";
 
 const ASSETS = [
   ".",
