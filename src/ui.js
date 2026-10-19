@@ -5,6 +5,8 @@
 
 const fmt = (n) => n.toLocaleString("en-US");
 
+export const GOAL_ICONS = { yarn: "🧶", boxes: "📦", fish: "🐟", score: "⭐" };
+
 export function createUI({ onMap } = {}) {
   const hud = document.createElement("div");
   hud.id = "hud";
@@ -17,9 +19,14 @@ export function createUI({ onMap } = {}) {
     <div class="hud-pill"><span class="hud-label">Level</span><span class="hud-value" data-level></span></div>
     <div class="hud-pill hud-moves"><span class="hud-label">Moves</span><span class="hud-value" data-moves></span></div>
     <div class="hud-pill hud-score">
-      <span class="hud-label">Score</span><span class="hud-value" data-score></span>
+      <span class="hud-label" data-goal-label>Score</span><span class="hud-value" data-score></span>
       <div class="hud-bar"><div class="hud-fill" data-fill></div></div>
+      <div class="hud-goals" data-goals hidden></div>
     </div>`;
+
+  const toast = document.createElement("div");
+  toast.id = "toast";
+  toast.hidden = true;
 
   const overlay = document.createElement("div");
   overlay.id = "overlay";
@@ -33,7 +40,8 @@ export function createUI({ onMap } = {}) {
       <div class="dialog-actions" data-actions></div>
     </div>`;
 
-  document.body.append(hud, overlay);
+  document.body.append(hud, overlay, toast);
+  let toastTimer = 0;
   const $ = (root, attr) => root.querySelector(`[${attr}]`);
   const moves = $(hud, "data-moves");
   hud.querySelector(".hud-map").addEventListener("click", () => onMap && onMap());
@@ -44,12 +52,39 @@ export function createUI({ onMap } = {}) {
     hideHud() { hud.hidden = true; },
     // Bottom edge of the HUD, so the renderer can lay the board out beneath it.
     hudBottom() { return hud.getBoundingClientRect().bottom; },
-    update({ level, movesLeft, score, target }) {
+    // goals: [{ kind, left }] on goal levels (replaces the score readout), else empty.
+    update({ level, movesLeft, score, target, goals = [] }) {
       $(hud, "data-level").textContent = fmt(level);
       moves.textContent = movesLeft;
       moves.parentElement.classList.toggle("low", movesLeft <= 5);
-      $(hud, "data-score").textContent = `${fmt(score)} / ${fmt(target)}`;
-      $(hud, "data-fill").style.width = `${Math.min(100, (100 * score) / target)}%`;
+      const onGoals = goals.length > 0;
+      $(hud, "data-goal-label").textContent = onGoals ? "Goal" : "Score";
+      $(hud, "data-score").hidden = onGoals;
+      $(hud, "data-fill").parentElement.hidden = onGoals;
+      const box = $(hud, "data-goals");
+      box.hidden = !onGoals;
+      if (onGoals) {
+        box.innerHTML = goals.map(({ kind, left }) =>
+          `<span class="hud-goal${left ? "" : " done"}">${GOAL_ICONS[kind]}<b>${left ? left : "✓"}</b></span>`).join("");
+      } else {
+        $(hud, "data-score").textContent = `${fmt(score)} / ${fmt(target)}`;
+        $(hud, "data-fill").style.width = `${Math.min(100, (100 * score) / target)}%`;
+      }
+    },
+    // A friendly callout over the board (level goal at the start of a level).
+    toast(text, sub = null, ms = 2600) {
+      clearTimeout(toastTimer);
+      toast.textContent = text;
+      if (sub) {
+        const small = document.createElement("small");
+        small.textContent = sub;
+        toast.append(small);
+      }
+      toast.hidden = false;
+      toast.classList.remove("show");
+      void toast.offsetWidth; // restart the animation
+      toast.classList.add("show");
+      toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
     },
     // actions: [{ label, onClick, secondary }]; stars: 0 hides the star row.
     showDialog({ title, body, ribbon, stars = 0, win, actions }) {
@@ -74,6 +109,6 @@ export function createUI({ onMap } = {}) {
       overlay.classList.toggle("win", !!win);
       overlay.hidden = false;
     },
-    hideDialog() { overlay.hidden = true; },
+    hideDialog() { overlay.hidden = true; toast.hidden = true; },
   };
 }

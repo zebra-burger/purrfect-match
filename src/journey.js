@@ -8,6 +8,18 @@
 import {
   PLAYER, saveProgress, starsFor, totalStars, exportCode, importCode, mergeProgress,
 } from "./storage.js";
+import { generateLevel } from "./generator.js";
+import { GOAL_ICONS } from "./ui.js";
+
+// Goal icons for a level ("🧶", "🐟📦"…), memoized — levels never change.
+const goalIconCache = new Map();
+function goalIcons(n) {
+  if (!goalIconCache.has(n)) {
+    const { targets } = generateLevel(n);
+    goalIconCache.set(n, Object.keys(targets).map((k) => GOAL_ICONS[k]).join(""));
+  }
+  return goalIconCache.get(n);
+}
 
 export const WORLD_SIZE = 20;
 
@@ -135,8 +147,9 @@ export function createJourney({ progress, onPlay, catSvg }) {
       const badge = n === CANDY_LEVEL ? `<span class="j-badge">🍬 Candy Crush level</span>`
         : isMilestone(n) ? `<span class="j-badge">🏆</span>` : "";
       const avatar = state === "current" ? `<span class="j-avatar">${catSvg}</span>` : "";
+      const goal = state !== "done" ? `<span class="j-goal">${goalIcons(n)}</span>` : "";
       html.push(`<button type="button" class="j-node ${state}" data-level="${n}" style="left:${x}%;top:${y}px"
-        ${state === "locked" ? "disabled" : ""} aria-label="Level ${n}">${avatar}<span class="j-num">${fmt(n)}</span>${starHtml}${badge}</button>`);
+        ${state === "locked" ? "disabled" : ""} aria-label="Level ${n}">${avatar}<span class="j-num">${fmt(n)}</span>${starHtml}${goal}${badge}</button>`);
       y += ROW;
     }
     if (lowest > 1) {

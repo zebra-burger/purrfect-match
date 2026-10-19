@@ -307,6 +307,85 @@ function drawDisco(g, px) {
 
 // --- Particles -------------------------------------------------------------------
 
+// --- Level-goal pieces (M3) ---------------------------------------------------------
+
+// Yarn tangle under a cat: a lilac patch with loops of pink wool. Two layers = denser.
+function drawYarn(g, layers, px) {
+  g.save();
+  g.scale(px / 100, px / 100);
+  g.beginPath(); g.roundRect(3, 3, 94, 94, 18);
+  g.fillStyle = layers > 1 ? "#b993ff" : "#d9c2ff";
+  g.fill();
+  g.strokeStyle = layers > 1 ? "#9b6ae6" : "#b993ff";
+  g.lineWidth = 3;
+  g.stroke();
+  g.lineCap = "round";
+  const loops = layers > 1
+    ? [[14, 20, 30, 8, 46, 22], [60, 10, 84, 14, 88, 34], [8, 54, 20, 80, 38, 90], [64, 90, 88, 84, 92, 62], [30, 40, 50, 30, 70, 44], [26, 66, 50, 74, 74, 62]]
+    : [[12, 22, 28, 8, 46, 18], [58, 88, 80, 92, 90, 70], [10, 60, 18, 82, 34, 90], [66, 10, 88, 16, 90, 36]];
+  for (const [i, [x1, y1, cx, cy, x2, y2]] of loops.entries()) {
+    g.beginPath(); g.moveTo(x1, y1); g.quadraticCurveTo(cx, cy, x2, y2);
+    g.strokeStyle = i % 2 ? "#ff7eb6" : "#b56ce0";
+    g.lineWidth = layers > 1 ? 5.5 : 4.5;
+    g.stroke();
+  }
+  g.restore();
+}
+
+// Two layers: a pink gift box with a bow. One layer: the plain cardboard box underneath.
+function drawBox(g, layers, px) {
+  g.save();
+  g.scale(px / 100, px / 100);
+  g.lineJoin = "round";
+  g.shadowColor = "rgba(122, 58, 98, 0.3)";
+  g.shadowBlur = 5;
+  g.shadowOffsetY = 3;
+  g.beginPath(); g.roundRect(6, 14, 88, 80, 10);
+  g.fillStyle = layers > 1 ? "#ff8fc0" : "#e3b07a";
+  g.fill();
+  g.shadowColor = "transparent";
+  g.strokeStyle = layers > 1 ? "#c92f72" : "#a8743f"; g.lineWidth = 3; g.stroke();
+  if (layers > 1) {
+    g.fillStyle = "#fff";
+    g.fillRect(44, 14, 12, 80);
+    g.fillRect(6, 44, 88, 10);
+    g.beginPath(); g.ellipse(36, 12, 13, 8, -0.4, 0, 7); g.ellipse(64, 12, 13, 8, 0.4, 0, 7);
+    g.fillStyle = "#fff"; g.fill(); g.strokeStyle = "#c92f72"; g.lineWidth = 2.5; g.stroke();
+    g.beginPath(); g.arc(50, 14, 6, 0, 7); g.fillStyle = "#ffd3e6"; g.fill(); g.stroke();
+  } else {
+    g.fillStyle = "#c98f55";
+    g.beginPath(); g.moveTo(6, 30); g.lineTo(94, 30); g.lineTo(94, 22); g.lineTo(6, 22); g.fill();
+    g.fillStyle = "rgba(255,255,255,0.55)";
+    g.fillRect(40, 14, 20, 16);
+    g.strokeStyle = "#a8743f"; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(30, 66); g.quadraticCurveTo(50, 76, 70, 66); g.stroke();
+    // a tiny paw print stamp
+    g.fillStyle = "#b9824c";
+    g.beginPath(); g.ellipse(50, 52, 6, 5, 0, 0, 7); g.fill();
+    for (const [x, y] of [[41, 43], [47, 40], [53, 40], [59, 43]]) { g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); }
+  }
+  g.restore();
+}
+
+// Fish treat: a salmon-pink fish cookie with icing, ready to drop to the bottom.
+function drawFish(g, px) {
+  g.save();
+  g.scale(px / 100, px / 100);
+  g.lineJoin = "round";
+  g.translate(50, 52);
+  g.rotate(-0.25);
+  g.beginPath(); g.moveTo(26, 0); g.lineTo(44, -16); g.lineTo(42, 16); g.closePath();
+  g.fillStyle = "#ff7f8f"; g.fill(); g.strokeStyle = OUTLINE; g.lineWidth = 3; g.stroke();
+  g.beginPath(); g.ellipse(-4, 0, 34, 22, 0, 0, 7);
+  g.fillStyle = "#ff9fa8"; g.fill(); g.stroke();
+  g.strokeStyle = "#fff"; g.lineWidth = 3; g.lineCap = "round";
+  for (const x of [2, 12]) { g.beginPath(); g.arc(x, 0, 12, -1.1, 1.1); g.stroke(); }
+  g.beginPath(); g.arc(-22, -5, 5, 0, 7); g.fillStyle = "#fff"; g.fill();
+  g.beginPath(); g.arc(-21, -5, 2.6, 0, 7); g.fillStyle = OUTLINE; g.fill();
+  g.beginPath(); g.ellipse(-26, 6, 4, 2.5, 0, 0, 7); g.fillStyle = BLUSH; g.fill();
+  g.restore();
+}
+
 const MAX_PARTICLES = 160;
 const PARTICLE_COLORS = ["#ff5fa2", "#ff8fc0", "#ffb3d1", "#c8a2ff", "#ffd23f", "#ffffff"];
 const HEART = new Path2D("M0 0.35C-0.15 0.2-0.5 0-0.5-0.25C-0.5-0.5-0.15-0.6 0-0.3C0.15-0.6 0.5-0.5 0.5-0.25C0.5 0-0.15 0.2 0 0.35Z");
@@ -336,6 +415,7 @@ export class Renderer {
     this.shakeUntil = 0;
     this.shakeMag = 0;
     this.lastNow = 0;
+    this.boxWobble = new Map(); // cell key -> time it was last hit
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
   }
@@ -350,6 +430,7 @@ export class Renderer {
     this.banner = null;
     this.selected = null;
     this.hint = null;
+    this.boxWobble.clear();
     for (let r = 0; r < board.rows; r++)
       for (let c = 0; c < board.cols; c++) {
         const tile = board.grid[r][c];
@@ -397,6 +478,14 @@ export class Renderer {
       return c;
     });
     this.specialCache.clear();
+    const goalImg = (draw) => {
+      const c = document.createElement("canvas");
+      c.width = c.height = px;
+      draw(c.getContext("2d"));
+      return c;
+    };
+    this.yarnImg = [null, goalImg((g) => drawYarn(g, 1, px)), goalImg((g) => drawYarn(g, 2, px))];
+    this.boxImg = [null, goalImg((g) => drawBox(g, 1, px)), goalImg((g) => drawBox(g, 2, px))];
 
     // Board panel + cell checkerboard, and the clip path that hides tiles above the board.
     const { rows, cols, mask } = this.board;
@@ -430,7 +519,7 @@ export class Renderer {
 
   // Rasterized special cat (built lazily: most boards only ever see a few).
   specialImage(tile) {
-    const key = tile.special === "disco" ? "disco" : `${tile.special}:${tile.color}:${tile.dir || ""}`;
+    const key = tile.special === "disco" || tile.special === "fish" ? tile.special : `${tile.special}:${tile.color}:${tile.dir || ""}`;
     let img = this.specialCache.get(key);
     if (!img) {
       const px = Math.round(this.ts * this.dpr);
@@ -442,6 +531,7 @@ export class Renderer {
       g.shadowOffsetY = px * 0.03;
       if (tile.special === "zoomie") drawZoomie(g, tile.color, px, tile.dir);
       else if (tile.special === "boom") drawBoom(g, tile.color, px);
+      else if (tile.special === "fish") drawFish(g, px);
       else drawDisco(g, px);
       this.specialCache.set(key, img);
     }
@@ -454,7 +544,7 @@ export class Renderer {
     const rect = this.canvas.getBoundingClientRect();
     const c = Math.floor((clientX - rect.left - this.ox) / this.ts);
     const r = Math.floor((clientY - rect.top - this.oy) / this.ts);
-    return this.board.exists(r, c) ? { r, c } : null;
+    return this.board.exists(r, c) && !this.board.boxes[r][c] ? { r, c } : null;
   }
 
   // --- Animation primitives ---
@@ -587,14 +677,48 @@ export class Renderer {
     }
   }
 
+  // Yarn unpicked and boxes knocked: puffs of wool and cardboard, a wobble on the box.
+  animateGoals({ yarnHits = [], boxHits = [] }) {
+    const now = performance.now();
+    for (const { r, c, left } of yarnHits) {
+      for (let i = 0; i < (left ? 3 : 6); i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.spawn(c + 0.5, r + 0.5, Math.cos(a) * 2, Math.sin(a) * 2 - 1, "heart", 0.8, ["#c9a7ff", "#b56ce0", "#ff7eb6"]);
+      }
+    }
+    for (const { r, c, left } of boxHits) {
+      this.boxWobble.set(r * this.board.cols + c, now);
+      const palette = left ? ["#fff", "#ff8fc0", "#ffd3e6"] : ["#e3b07a", "#c98f55", "#fff"];
+      for (let i = 0; i < (left ? 5 : 10); i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.spawn(c + 0.5, r + 0.5, Math.cos(a) * 3, Math.sin(a) * 3 - 1.5, "spark", left ? 0.8 : 1.1, palette);
+      }
+    }
+    if (boxHits.some((b) => b.left === 0)) this.shake(3, 160);
+  }
+
+  // Fish treats reaching the bottom: they dive out of the board in a shower of sparkles.
+  animateCollect(got) {
+    return Promise.all(got.map(({ r, c, tile }) => {
+      const s = this.sprites.get(tile.id);
+      this.burst(c, r, 12, 1.4, true);
+      if (!s) return null;
+      return this.animate(420, (t) => {
+        s.y = r + t * 0.9;
+        s.scale = 1 + 0.3 * Math.sin(Math.PI * t);
+        s.alpha = 1 - t;
+      }, ease.inOutQuad).then(() => this.sprites.delete(tile.id));
+    }));
+  }
+
   // --- Juice: particles, combo text, shake ---
 
-  spawn(x, y, vx, vy, kind = Math.random() < 0.55 ? "heart" : "spark", big = 1) {
+  spawn(x, y, vx, vy, kind = Math.random() < 0.55 ? "heart" : "spark", big = 1, palette = PARTICLE_COLORS) {
     if (this.particles.length >= MAX_PARTICLES) this.particles.shift();
     this.particles.push({
       x, y, vx, vy, kind, life: 0, max: 0.55 + Math.random() * 0.45,
       size: (0.16 + Math.random() * 0.14) * big,
-      color: PARTICLE_COLORS[(Math.random() * PARTICLE_COLORS.length) | 0],
+      color: palette[(Math.random() * palette.length) | 0],
       rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 8,
     });
   }
@@ -697,6 +821,11 @@ export class Renderer {
       ctx.beginPath(); ctx.roundRect(x + 1, y + 1, ts - 2, ts - 2, ts * 0.16); ctx.fill();
     }
 
+    const { yarn, boxes } = this.board;
+    for (let r = 0; r < this.board.rows; r++)
+      for (let c = 0; c < this.board.cols; c++)
+        if (yarn[r][c]) ctx.drawImage(this.yarnImg[Math.min(2, yarn[r][c])], this.ox + c * ts, this.oy + r * ts, ts, ts);
+
     ctx.save();
     ctx.clip(this.cellClip);
     for (const s of this.sprites.values()) {
@@ -712,7 +841,8 @@ export class Renderer {
       const special = s.tile.special;
       const img = special ? this.specialImage(s.tile) : this.catCache[s.tile.color];
       const cx = this.ox + (s.x + 0.5) * ts, cy = this.oy + (s.y + 0.5) * ts;
-      if (special) {
+      if (special === "fish") rot += 0.1 * Math.sin(now / 300 + s.x);
+      else if (special) {
         // Specials breathe and glow so they read at a glance.
         scale *= 1 + 0.04 * Math.sin(now / 180 + s.x + s.y);
         ctx.globalAlpha = s.alpha * (0.35 + 0.15 * Math.sin(now / 220));
@@ -730,6 +860,18 @@ export class Renderer {
       if (special === "disco") this.drawGlint(ctx, now, ts * scale);
       base();
     }
+    // Boxes sit on top, so tiles falling through them are hidden.
+    for (let r = 0; r < this.board.rows; r++)
+      for (let c = 0; c < this.board.cols; c++) {
+        if (!boxes[r][c]) continue;
+        const hit = this.boxWobble.get(r * this.board.cols + c);
+        const t = hit ? (now - hit) / 300 : 1;
+        const wob = t < 1 ? Math.sin(t * Math.PI * 3) * (1 - t) * 0.12 : 0;
+        ctx.translate(this.ox + (c + 0.5) * ts, this.oy + (r + 0.5) * ts);
+        ctx.rotate(wob);
+        ctx.drawImage(this.boxImg[Math.min(2, boxes[r][c])], -ts / 2, -ts / 2, ts, ts);
+        base();
+      }
     ctx.restore();
     ctx.globalAlpha = 1;
 

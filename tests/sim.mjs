@@ -1,7 +1,8 @@
 // sim.mjs — headless bot that plays a generated level, for calibrating the
 // difficulty curve. Mirrors main.js's resolve loop without animation.
 //   node tests/sim.mjs [fromLevel] [toLevel]
-import { Board, FISH_POINTS } from "../src/board.js";
+import { Board, FISH_POINTS, goalsMet } from "../src/board.js";
+export { goalsMet };
 import { generateLevel } from "../src/generator.js";
 import { mulberry32 } from "../src/rng.js";
 
@@ -18,15 +19,6 @@ export function resolve(board, swap) {
   }
   if (!board.hasLegalMove()) board.shuffle();
   return points;
-}
-
-// Has the level been won? (mirrors main.js)
-export function goalsMet(board, targets, score) {
-  if (targets.score != null && score < targets.score) return false;
-  if (targets.yarn != null && board.yarnLeft() > 0) return false;
-  if (targets.boxes != null && board.boxesLeft() > 0) return false;
-  if (targets.fish != null && board.fishCollected < targets.fish) return false;
-  return true;
 }
 
 // Greedy bot: looks one step ahead (no cascades) and takes the move that scores most

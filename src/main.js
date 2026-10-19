@@ -3,7 +3,7 @@
 // The render loop lives in renderer.js; this file owns the turn logic (swap, resolve
 // cascades, win/lose) and awaits the renderer's animations between steps.
 
-import { Board } from "./board.js";
+import { Board, FISH_POINTS, goalsMet, goalsLeft } from "./board.js";
 import { generateLevel } from "./generator.js";
 import { mulberry32 } from "./rng.js";
 import { Renderer } from "./renderer.js";
@@ -12,7 +12,7 @@ import {
   PLAYER, loadProgress, saveProgress, requestPersistence, recordPlay, recordResult,
 } from "./storage.js";
 import { createJourney, milestoneMessage } from "./journey.js";
-import { createUI } from "./ui.js";
+import { createUI, GOAL_ICONS } from "./ui.js";
 import { unlockAudio, sfx, buzz } from "./audio.js";
 import { attachSoundToggle } from "./sound-toggle.js";
 
@@ -113,8 +113,8 @@ function playLevel(n) {
 function startLevel(n) {
   game.level = n;
   game.lvl = generateLevel(n);
-  const { boardShape, tiles, colors, refillSeed, moves } = game.lvl;
-  game.board = new Board(boardShape, tiles, colors, mulberry32(refillSeed));
+  const { boardShape, tiles, colors, refillSeed, moves, blockers } = game.lvl;
+  game.board = new Board(boardShape, tiles, colors, mulberry32(refillSeed), blockers);
   game.movesLeft = moves;
   game.score = 0;
   game.cats = 0;
@@ -127,7 +127,23 @@ function startLevel(n) {
   updateHud();
   renderer.setBoard(game.board);
   renderer.layout(ui.hudBottom());
+  ui.toast(...goalText(game.lvl));
   armHint();
+}
+
+// "Untangle the yarn 🧶" etc. — shown as the level starts, with a tip while she learns.
+function goalText({ objective, targets }) {
+  if (objective === "score") return [`Score ${fmt(targets.score)} ${GOAL_ICONS.score}`];
+  const parts = [];
+  if (targets.yarn) parts.push(`Untangle the yarn ${GOAL_ICONS.yarn}`);
+  if (targets.boxes) parts.push(`Open the boxes ${GOAL_ICONS.boxes}`);
+  if (targets.fish) parts.push(`Drop ${targets.fish} fish ${GOAL_ICONS.fish}`);
+  let tip = null;
+  if (game.level <= 30) {
+    if (targets.fish) tip = "Tip: you can swipe a fish down";
+    else if (targets.boxes) tip = "Match next to a box to open it";
+  }
+  return [parts.join(" + "), tip];
 }
 
 function updateHud() {
@@ -136,6 +152,7 @@ function updateHud() {
     movesLeft: game.movesLeft,
     score: game.score,
     target: game.lvl.targets.score,
+    goals: goalsLeft(game.board, game.lvl.targets),
   });
 }
 
@@ -155,10 +172,11 @@ async function playSwap(a, b) {
   renderer.hint = null;
   clearTimeout(game.hintTimer);
 
+  const nudge = board.isFishNudge(a, b); // a fish treat swimming down a cell
   board.swap(a, b);
   sfx.swap();
   await renderer.animateSwap(a, b);
-  if (!board.isSpecialSwap(a, b) && board.findMatches().length === 0) {
+  if (!nudge && !board.isSpecialSwap(a, b) && board.findMatches().length === 0) {
     // Not a match: swing back, no move spent.
     board.swap(a, b);
     sfx.nope();
@@ -172,7 +190,7 @@ async function playSwap(a, b) {
   updateHud();
   await resolveCascades([a, b]);
 
-  if (game.score >= game.lvl.targets.score) return finish(true);
+  if (goalsMet(board, game.lvl.targets, game.score)) return finish(true);
   if (game.movesLeft <= 0) return finish(false);
 
   if (!board.hasLegalMove()) {
@@ -189,6 +207,7 @@ async function playSwap(a, b) {
 // made) decides where new specials land and fires special swaps on the first step.
 async function resolveCascades(swap = null) {
   const { board } = game;
+  await collectFish();
   for (let cascade = 1; ; cascade++) {
     const step = board.resolveStep(cascade === 1 ? swap : null);
     if (!step) return;
@@ -201,7 +220,25 @@ async function resolveCascades(swap = null) {
       renderer.comboText(cascade - 1);
       if (cascade <= 4) sfx.combo(cascade - 1);
     }
+    renderer.animateGoals(step);
     await renderer.animateStep(step);
+    await renderer.animateCollapse(board.collapse());
+    await collectFish();
+  }
+}
+
+// Fish treats that have reached the bottom are collected; the column then refills,
+// which can land another treat on the bottom.
+async function collectFish() {
+  const { board } = game;
+  for (;;) {
+    const got = board.collectFish();
+    if (!got.length) return;
+    game.score += FISH_POINTS * got.length;
+    updateHud();
+    sfx.sparkle();
+    buzz(25);
+    await renderer.animateCollect(got);
     await renderer.animateCollapse(board.collapse());
   }
 }
@@ -248,10 +285,16 @@ function finish(won) {
     }), 350);
   } else {
     sfx.lose();
+    const left = goalsLeft(game.board, game.lvl.targets).filter((g) => g.left > 0);
+    const total = left.reduce((sum, g) => sum + g.left, 0);
+    const body = target != null
+      ? `${fmt(game.score)} of ${fmt(target)} points. ` +
+        (game.score >= 0.75 * target ? "So close — one more go?" : `The cats believe in you, ${PLAYER}.`)
+      : `Just ${left.map((g) => `${g.left} ${GOAL_ICONS[g.kind]}`).join(" and ")} to go. ` +
+        (total <= 3 ? "So close — one more go?" : `The cats believe in you, ${PLAYER}.`);
     setTimeout(() => ui.showDialog({
       title: "Out of moves",
-      body: `${fmt(game.score)} of ${fmt(target)} points. ` +
-        (game.score >= 0.75 * target ? "So close — one more go?" : `The cats believe in you, ${PLAYER}.`),
+      body,
       actions: [toMap, { label: "Try again", onClick: () => playLevel(level) }],
     }), 350);
   }

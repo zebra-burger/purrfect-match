@@ -542,6 +542,24 @@ export class Board {
   }
 }
 
+// Has the level been won? `targets` is the generator's { score } or { yarn, boxes, fish }.
+export function goalsMet(board, targets, score) {
+  if (targets.score != null && score < targets.score) return false;
+  if (targets.yarn != null && board.yarnLeft() > 0) return false;
+  if (targets.boxes != null && board.boxesLeft() > 0) return false;
+  if (targets.fish != null && board.fishCollected < targets.fish) return false;
+  return true;
+}
+
+// What's still to do, for the HUD: [{ kind, left }] in a fixed order.
+export function goalsLeft(board, targets) {
+  const out = [];
+  if (targets.yarn != null) out.push({ kind: "yarn", left: board.yarnLeft() });
+  if (targets.boxes != null) out.push({ kind: "boxes", left: board.boxesLeft() });
+  if (targets.fish != null) out.push({ kind: "fish", left: Math.max(0, targets.fish - board.fishCollected) });
+  return out;
+}
+
 // Fills every existing cell with a color so that no match is standing at the start.
 // Returns a 2D color array (null for holes). Used by the generator.
 export function fillWithoutMatches(mask, colorCount, rng) {
