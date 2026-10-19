@@ -215,24 +215,29 @@ function drawZoomie(g, color, px, dir) {
   drawCat(g, color, px / 2, px / 2, px * 0.86);
   g.save();
   g.globalCompositeOperation = "source-atop";
-  g.fillStyle = "rgba(255, 255, 255, 0.62)";
-  const band = px * 0.085;
-  for (const k of [-1, 0, 1]) {
-    const off = px / 2 + k * px * 0.2 - band / 2;
+  g.shadowColor = "transparent"; // a shadow composited atop would tint the whole cat
+  // Stripes sit above and below the eyes so she can still tell which cat it is.
+  for (const [k, w] of [[-0.42, 0.05], [-0.26, 0.08], [0.26, 0.08], [0.42, 0.05]]) {
+    const band = px * w;
+    const off = px / 2 + k * px - band / 2;
+    g.fillStyle = "rgba(255, 61, 139, 0.8)";
     if (dir === "row") g.fillRect(0, off, px, band); else g.fillRect(off, 0, band, px);
+    g.fillStyle = "rgba(255, 255, 255, 0.9)";
+    const edge = band * 0.35;
+    if (dir === "row") { g.fillRect(0, off - edge, px, edge); g.fillRect(0, off + band, px, edge); }
+    else { g.fillRect(off - edge, 0, edge, px); g.fillRect(off + band, 0, edge, px); }
   }
   g.restore();
   g.save();
   g.translate(px / 2, px / 2);
   if (dir === "col") g.rotate(Math.PI / 2);
-  g.strokeStyle = "#ff3d8b";
-  g.lineWidth = px * 0.05;
   g.lineCap = g.lineJoin = "round";
   for (const side of [-1, 1]) {
+    const x = side * px * 0.43, w = side * px * 0.09;
     g.beginPath();
-    const x = side * px * 0.44, w = side * px * 0.06;
-    g.moveTo(x - w, -px * 0.08); g.lineTo(x, 0); g.lineTo(x - w, px * 0.08);
-    g.stroke();
+    g.moveTo(x - w, -px * 0.12); g.lineTo(x, 0); g.lineTo(x - w, px * 0.12);
+    g.strokeStyle = "#ffffff"; g.lineWidth = px * 0.1; g.stroke();
+    g.strokeStyle = "#ff3d8b"; g.lineWidth = px * 0.055; g.stroke();
   }
   g.restore();
 }
@@ -242,6 +247,7 @@ function drawBoom(g, color, px) {
   drawCat(g, color, px / 2, px / 2, px * 0.82);
   g.save();
   g.globalCompositeOperation = "source-atop";
+  g.shadowColor = "transparent"; // a shadow composited atop would tint the whole cat
   g.fillStyle = "rgba(255, 79, 154, 0.75)";
   g.fillRect(px * 0.455, 0, px * 0.09, px);
   g.fillRect(0, px * 0.6, px, px * 0.09);
