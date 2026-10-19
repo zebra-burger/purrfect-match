@@ -1,0 +1,9 @@
+# Purrfect Match cloud backup. Deploy: npx wrangler deploy
+name = "purrfect-match-sync"
+main = "index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "SAVES"
+id = "aa787a6df8a048f596389f8bd795f9ce"
