@@ -21,6 +21,7 @@ const ASSETS = [
   "src/input.js",
   "src/storage.js",
   "src/ui.js",
+  "src/journey.js",
   "src/audio.js",
 ];
 
