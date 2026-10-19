@@ -17,6 +17,16 @@
 // carries `dir` ("row" | "col"). Disco Cats have color null so they never match.
 // resolveStep() runs one clear: matches, special creation, special effects (chaining
 // through any specials they hit), and the swap combos.
+//
+// Level goals (M3) live on the board too:
+//   yarn[r][c]   tangles (0–2 layers) under a cat; clearing that cat unpicks a layer
+//   boxes[r][c]  cardboard boxes (0–2 layers) that fill a cell; a match next to one,
+//                or a blast over it, knocks a layer off; at 0 the cell opens up
+//   fish treats  tiles with special "fish" and no color: they never match and blasts
+//                skip them; they fall like cats and are collected at the bottom.
+//                A fish can also be swiped down one cell (costs a move) so a treat
+//                stuck near the bottom is never hopeless
+// Tiles fall through boxes the same way they fall through holes.
 
 let nextTileId = 1;
 
@@ -30,26 +40,88 @@ export const MATCH_POINTS = { three: 60, four: 120, lt: 180, five: 250 };
 export const SPECIAL_OF = { four: "zoomie", lt: "boom", five: "disco" };
 // Each tile a special clears beyond the match itself.
 export const BLAST_POINTS = 30;
+export const YARN_POINTS = 40;
+export const BOX_POINTS = 60;
+export const FISH_POINTS = 500;
+
+// Swap-firing specials (fish treats are tiles with a `special`, but they're cargo).
+const isPower = (t) => Boolean(t && t.special && t.special !== "fish");
+const zeros = (mask) => mask.map((row) => row.map(() => 0));
 
 export class Board {
   // colors: 2D array of color indices (null where the mask has no cell).
   // colorCount: how many cat colors refills draw from. rng: () => [0, 1) for refills.
-  constructor(mask, colors, colorCount, rng) {
+  // blockers (optional): { yarn, boxes: 2D layer counts, fish: [{r, c}], fishTotal }.
+  constructor(mask, colors, colorCount, rng, blockers = null) {
     this.rows = mask.length;
     this.cols = mask[0].length;
     this.mask = mask.map((row) => row.slice());
     this.colorCount = colorCount;
     this.rng = rng;
+    this.yarn = blockers?.yarn ? blockers.yarn.map((row) => row.slice()) : zeros(mask);
+    this.boxes = blockers?.boxes ? blockers.boxes.map((row) => row.slice()) : zeros(mask);
     this.grid = mask.map((row, r) =>
-      row.map((exists, c) => (exists && colors[r][c] != null ? makeTile(colors[r][c]) : null))
+      row.map((exists, c) => (exists && !this.boxes[r][c] && colors[r][c] != null ? makeTile(colors[r][c]) : null))
     );
+    const fish = blockers?.fish || [];
+    for (const { r, c } of fish) this.grid[r][c] = makeTile(null, "fish");
+    this.fishToSpawn = Math.max(0, (blockers?.fishTotal || 0) - fish.length);
+    this.fishCollected = 0;
   }
 
   // Independent copy for look-ahead (tiles are copied too; refills draw from `rng`).
   clone(rng = this.rng) {
     const b = Object.create(Board.prototype);
-    Object.assign(b, this, { rng, mask: this.mask, grid: this.grid.map((row) => row.map((t) => t && { ...t })) });
+    Object.assign(b, this, {
+      rng,
+      mask: this.mask,
+      grid: this.grid.map((row) => row.map((t) => t && { ...t })),
+      yarn: this.yarn.map((row) => row.slice()),
+      boxes: this.boxes.map((row) => row.slice()),
+    });
     return b;
+  }
+
+  // A cell tiles can sit in: on the board and not boxed up.
+  open(r, c) {
+    return this.exists(r, c) && !this.boxes[r][c];
+  }
+
+  yarnLeft() {
+    let n = 0;
+    for (const row of this.yarn) for (const v of row) n += v;
+    return n;
+  }
+
+  boxesLeft() {
+    let n = 0;
+    for (const row of this.boxes) for (const v of row) n += v;
+    return n;
+  }
+
+  fishOnBoard() {
+    let n = 0;
+    for (const row of this.grid) for (const t of row) if (t && t.special === "fish") n++;
+    return n;
+  }
+
+  // Fish treats sitting on the lowest open cell of their column are collected.
+  // Returns [{ r, c, tile }] (cells are left empty: call collapse() next).
+  collectFish() {
+    const got = [];
+    for (let c = 0; c < this.cols; c++) {
+      for (let r = this.rows - 1; r >= 0; r--) {
+        if (!this.open(r, c)) continue;
+        const t = this.grid[r][c];
+        if (t && t.special === "fish") {
+          got.push({ r, c, tile: t });
+          this.grid[r][c] = null;
+          this.fishCollected++;
+        }
+        break;
+      }
+    }
+    return got;
   }
 
   exists(r, c) {
@@ -152,13 +224,15 @@ export class Board {
     const queue = [];
     const blasts = [];
     const created = [];
+    const boxHit = new Map();
     let groups = [];
 
     const mark = (r, c) => {
+      if (this.exists(r, c) && this.boxes[r][c]) { boxHit.set(key(r, c), { r, c }); return; }
       const t = this.get(r, c), k = key(r, c);
-      if (!t || protect.has(k) || clear.has(k)) return;
+      if (!t || t.special === "fish" || protect.has(k) || clear.has(k)) return;
       clear.set(k, { r, c });
-      if (t.special && !consumed.has(t.id)) queue.push({ r, c, tile: t });
+      if (isPower(t) && !consumed.has(t.id)) queue.push({ r, c, tile: t });
     };
     const markRow = (r) => { for (let c = 0; c < this.cols; c++) mark(r, c); };
     const markCol = (c) => { for (let r = 0; r < this.rows; r++) mark(r, c); };
@@ -235,6 +309,11 @@ export class Board {
         created.push({ r: at.r, c: at.c, tile: this.grid[at.r][at.c], special, dir });
       }
       for (const g of groups) for (const { r, c } of g.cells) mark(r, c);
+      // A match knocks a layer off every box right next to it.
+      for (const g of groups)
+        for (const { r, c } of g.cells)
+          for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
+            if (this.exists(r + dr, c + dc) && this.boxes[r + dr][c + dc]) boxHit.set(key(r + dr, c + dc), { r: r + dr, c: c + dc });
     }
     const matched = clear.size;
 
@@ -257,10 +336,16 @@ export class Board {
     }
 
     const removed = [];
+    const yarnHits = [];
     for (const { r, c } of clear.values()) {
       removed.push({ r, c, tile: this.grid[r][c] });
       this.grid[r][c] = null;
+      if (this.yarn[r][c]) yarnHits.push({ r, c, left: --this.yarn[r][c] });
     }
+    // Specials created this step stay put but still unpick the yarn under them.
+    for (const { r, c } of created)
+      if (this.yarn[r][c] && !clear.has(key(r, c))) yarnHits.push({ r, c, left: --this.yarn[r][c] });
+    const boxHits = [...boxHit.values()].map(({ r, c }) => ({ r, c, left: --this.boxes[r][c] }));
     for (const cr of created) {
       cr.tile.special = cr.special;
       if (cr.dir) cr.tile.dir = cr.dir;
@@ -274,7 +359,9 @@ export class Board {
       removed,
       created: created.map(({ r, c, tile }) => ({ r, c, tile })),
       blasts,
-      points: matchPoints + BLAST_POINTS * Math.max(0, extra),
+      yarnHits,
+      boxHits,
+      points: matchPoints + BLAST_POINTS * Math.max(0, extra) + YARN_POINTS * yarnHits.length + BOX_POINTS * boxHits.length,
     };
   }
 
@@ -306,11 +393,13 @@ export class Board {
     return best > 0 ? counts.indexOf(best) : null;
   }
 
-  // Swaps that fire without needing a match: a Disco Cat with anything, or two specials.
+  // Swaps that fire without needing a match: a Disco Cat with anything but a fish
+  // treat, or two specials.
   isSpecialSwap(a, b) {
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
-    if (!ta || !tb) return false;
-    return ta.special === "disco" || tb.special === "disco" || Boolean(ta.special && tb.special);
+    if (!isPower(ta) && !isPower(tb)) return false;
+    if (!ta || !tb || ta.special === "fish" || tb.special === "fish") return false;
+    return ta.special === "disco" || tb.special === "disco" || (isPower(ta) && isPower(tb));
   }
 
   // Removes the tiles in the given match groups. Returns [{ r, c, tile }] removed.
@@ -326,15 +415,18 @@ export class Board {
   }
 
   // Gravity + refill. Tiles fall straight down within their column, passing through
-  // masked-out cells (holes), then new tiles drop in from above.
+  // masked-out cells (holes) and boxes, then new tiles drop in from above. While a
+  // level still owes fish treats, some of the new tiles are fish (never more than two
+  // on the board at once).
   // Returns { falls: [{ tile, c, fromR, toR }], spawns: [{ tile, c, fromR, toR }] }.
   // Spawn `fromR` is negative-ish (above the column's top cell) for the renderer.
   collapse() {
     const falls = [];
     const spawns = [];
+    let fishAround = this.fishOnBoard();
     for (let c = 0; c < this.cols; c++) {
       const cells = [];
-      for (let r = 0; r < this.rows; r++) if (this.mask[r][c]) cells.push(r);
+      for (let r = 0; r < this.rows; r++) if (this.open(r, c)) cells.push(r);
       if (!cells.length) continue;
       let write = cells.length - 1;
       for (let i = cells.length - 1; i >= 0; i--) {
@@ -351,7 +443,14 @@ export class Board {
       }
       const empty = write + 1;
       for (let k = write; k >= 0; k--) {
-        const tile = makeTile(Math.floor(this.rng() * this.colorCount));
+        let tile;
+        if (this.fishToSpawn > 0 && fishAround < 2 && this.rng() < 0.4) {
+          tile = makeTile(null, "fish");
+          this.fishToSpawn--;
+          fishAround++;
+        } else {
+          tile = makeTile(Math.floor(this.rng() * this.colorCount));
+        }
         const toR = cells[k];
         this.grid[toR][c] = tile;
         spawns.push({ tile, c, fromR: cells[0] - (empty - k), toR });
@@ -378,9 +477,18 @@ export class Board {
     return h >= 3 || v >= 3;
   }
 
-  // Would swapping a and b produce a match (or fire a special swap)? Leaves the board unchanged.
+  // A fish treat swimming down into the cell right below it.
+  isFishNudge(a, b) {
+    const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
+    if (!ta || !tb || a.c !== b.c || Math.abs(a.r - b.r) !== 1) return false;
+    const [up, down] = a.r < b.r ? [ta, tb] : [tb, ta];
+    return up.special === "fish" && down.special !== "fish";
+  }
+
+  // Is swapping a and b a legal move: a match, a special swap, or a fish nudge?
+  // Leaves the board unchanged.
   swapMakesMatch(a, b) {
-    if (this.isSpecialSwap(a, b)) return true;
+    if (this.isSpecialSwap(a, b) || this.isFishNudge(a, b)) return true;
     const ta = this.get(a.r, a.c), tb = this.get(b.r, b.c);
     if (!ta || !tb || ta.color === tb.color) return false;
     this.swap(a, b);
