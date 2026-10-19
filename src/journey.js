@@ -270,18 +270,7 @@ export function createJourney({ progress, onPlay, catSvg }) {
       syncNow(progress).then(renderCloud);
       return;
     }
-    renderSignIn(sheetCard.querySelector("[data-google]"), progress, (result) => {
-      if (!result.ok) {
-        const msg = sheetCard.querySelector("[data-msg]");
-        if (msg) msg.textContent = result.error || "Couldn't reach the cloud — your progress is still safe on this phone.";
-        return;
-      }
-      if (result.pulled) return welcomeBack();
-      renderHeader();
-      openSheet(`<h2>All set! ☁️</h2><p>Your journey now backs up by itself, ${PLAYER}.</p>
-        <button type="button" class="j-btn" data-ok>Back to the map</button>`);
-      sheetCard.querySelector("[data-ok]").addEventListener("click", closeSheet);
-    });
+    renderSignIn(sheetCard.querySelector("[data-google]"), progress, afterSignIn);
     sheetCard.querySelector("[data-restore]").addEventListener("click", async () => {
       const text = sheetCard.querySelector("textarea").value.trim();
       try {
@@ -290,6 +279,39 @@ export function createJourney({ progress, onPlay, catSvg }) {
         sheetCard.querySelector("[data-restore-msg]").textContent = "Hmm, that doesn't look like a backup link. 🙀";
       }
     });
+  }
+
+  // What happens once Google sign-in finishes (from the backup sheet or the welcome card).
+  function afterSignIn(result) {
+    if (!result.ok) {
+      const msg = sheetCard.querySelector("[data-msg]");
+      if (msg) msg.textContent = result.error || "Couldn't reach the cloud — your progress is still safe on this phone.";
+      return;
+    }
+    if (result.pulled) return welcomeBack();
+    renderHeader();
+    openSheet(`<h2>All set! ☁️</h2><p>Your journey now backs up by itself, ${PLAYER}.</p>
+      <button type="button" class="j-btn" data-ok>Let's play</button>`);
+    sheetCard.querySelector("[data-ok]").addEventListener("click", closeSheet);
+  }
+
+  // A phone that has never played and isn't signed in: she may be coming back on a new
+  // phone, so offer to bring her journey back before she starts again from level 1.
+  const isFreshPhone = () => !account() && progress.level === 1 && !progress.stars.replace(/0/g, "")
+    && !progress.stats.plays;
+
+  function openWelcome() {
+    openSheet(`
+      <h2>Welcome, ${PLAYER}! 💕</h2>
+      <p>Played before on another phone? Sign in with Google and your whole journey
+        comes back — levels, stars and boosters.</p>
+      <div class="j-google" data-google></div>
+      <p class="j-small" data-msg></p>
+      <button type="button" class="j-btn secondary" data-fresh>Start a new journey</button>
+      <p class="j-small">You can sign in any time from ☁️ on the map. Your progress always
+        saves on this phone, even offline.</p>`);
+    sheetCard.querySelector("[data-fresh]").addEventListener("click", closeSheet);
+    renderSignIn(sheetCard.querySelector("[data-google]"), progress, afterSignIn);
   }
 
   function welcomeBack() {
@@ -328,6 +350,7 @@ export function createJourney({ progress, onPlay, catSvg }) {
     show() {
       root.hidden = false;
       refresh();
+      if (isFreshPhone() && sheet.hidden) openWelcome();
     },
     hide() { root.hidden = true; closeSheet(); },
     // After a background sync: redraw if she's looking at the map.
