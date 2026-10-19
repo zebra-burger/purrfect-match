@@ -75,3 +75,42 @@ test("old v1 saves upgrade cleanly", async () => {
   assert.equal(back.stars, "");
   assert.equal(back.version, 2);
 });
+
+test("a crafted backup can't plant junk: numbers, dates and sizes are checked", async () => {
+  const evil = {
+    level: 1e15, stars: "3".repeat(50),
+    stats: { cats: "lots", dayStreak: "7", wins: -4, firstDay: "!<img src=x onerror=alert(1)>", lastDay: "2026-10-18", bestScore: 1e300 },
+    backup: { lastLevel: "x", lastAt: {} }, cloud: { lastAt: "now", lastLevel: -1 },
+  };
+  const back = await importCode("j" + Buffer.from(JSON.stringify(evil)).toString("base64url"));
+  assert.equal(back.level, 1, "absurd level ignored");
+  assert.equal(back.stars, "3", "no stars beyond her level");
+  assert.equal(back.stats.cats, 0);
+  assert.equal(back.stats.dayStreak, 0);
+  assert.equal(back.stats.wins, 0);
+  assert.equal(back.stats.bestScore, 0);
+  assert.notEqual(back.stats.firstDay, evil.stats.firstDay);
+  assert.equal(back.stats.lastDay, "2026-10-18");
+  assert.equal(back.backup.lastAt, null);
+  assert.equal(back.cloud.lastLevel, 0);
+});
+
+test("a ?level=N test jump never unlocks or stars levels ahead of her", () => {
+  const p = loadProgress();
+  p.level = 12;
+  const r = recordResult(p, { level: 500, won: true, score: 9000, movesLeft: 20, moves: 25, cats: 50 });
+  assert.equal(p.level, 12);
+  assert.equal(totalStars(p), 0);
+  assert.deepEqual(r.earned, []);
+  assert.equal(p.stats.cats, 50, "kitties matched still count");
+});
+
+test("the day streak comes from whichever copy played most recently", () => {
+  const phone = loadProgress(); phone.stats.lastDay = null; phone.stats.dayStreak = 0;
+  const cloud = loadProgress(); cloud.stats.lastDay = "2026-10-18"; cloud.stats.dayStreak = 30; cloud.stats.bestDayStreak = 30;
+  const m = mergeProgress(phone, cloud);
+  assert.equal(m.stats.lastDay, "2026-10-18");
+  assert.equal(m.stats.dayStreak, 30);
+  const today = loadProgress(); today.stats.lastDay = "2026-10-19"; today.stats.dayStreak = 1;
+  assert.equal(mergeProgress(cloud, today).stats.dayStreak, 1, "a broken streak isn't revived by an old copy");
+});

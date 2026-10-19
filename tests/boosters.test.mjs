@@ -29,9 +29,11 @@ test("each newly three-starred level earns a booster, taking turns", () => {
 
 test("finishing a world for the first time gifts one of every booster", () => {
   const p = loadProgress();
+  p.level = 20; // she's reached level 20
   assert.deepEqual(win(p, 20, 1).earned, ["paw", "shuffle", "moves"]);
   assert.deepEqual(p.boosters, { paw: 2, shuffle: 2, moves: 2 });
   assert.deepEqual(win(p, 20, 1).earned, [], "only the first time");
+  p.level = 40;
   assert.deepEqual(win(p, 40).earned, ["paw", "paw", "shuffle", "moves"], "3 stars + world gift");
 });
 

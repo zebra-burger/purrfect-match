@@ -58,43 +58,62 @@ async function request(path, { token, ...init } = {}) {
 // --- Sync -------------------------------------------------------------------------
 
 let inFlight = null;
+let again = false;
 
 // Pull → merge → push. Resolves to { ok, pulled, signedOut } and never throws.
-// Overlapping calls share one sync.
+// A call that arrives while a sync is running gets one more sync straight after it,
+// so a level that ends mid-sync is never left out.
 export function syncNow(progress) {
-  if (inFlight) return inFlight;
-  inFlight = (async () => {
-    const me = account();
-    if (!me) return { ok: false, signedOut: true };
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false };
-    try {
-      let pulled = false;
-      const res = await request("me/save", { token: me.token });
-      if (res.status === 401) { setAccount(null); return { ok: false, signedOut: true }; }
-      if (res.status === 200) {
-        // A cloud copy that won't decode is ignored and overwritten below.
-        let theirs = null;
-        try { theirs = await importCode((await res.json()).code); } catch { theirs = null; }
-        if (theirs) {
-          const before = progress.level;
-          Object.assign(progress, mergeProgress(progress, theirs));
-          pulled = progress.level > before;
-        }
-      } else if (res.status !== 204) {
+  if (inFlight) {
+    again = true;
+    return inFlight;
+  }
+  inFlight = syncOnce(progress).then(async (result) => {
+    while (again && result.ok) {
+      again = false;
+      result = await syncOnce(progress);
+    }
+    again = false;
+    return result;
+  }).finally(() => { inFlight = null; });
+  return inFlight;
+}
+
+async function syncOnce(progress) {
+  const me = account();
+  if (!me) return { ok: false, signedOut: true };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false };
+  try {
+    let pulled = false;
+    const res = await request("me/save", { token: me.token });
+    if (res.status === 401) { setAccount(null); return { ok: false, signedOut: true }; }
+    if (res.status === 200) {
+      const remote = await res.json().catch(() => null);
+      let theirs = null;
+      try { theirs = await importCode(remote?.code); } catch { theirs = null; }
+      if (theirs) {
+        const before = progress.level;
+        Object.assign(progress, mergeProgress(progress, theirs));
+        pulled = progress.level > before;
+      } else if (Number.isInteger(remote?.level) && remote.level > progress.level) {
+        // A cloud copy this phone can't read, and it's further along: leave it alone
+        // rather than replace it with less (e.g. an older browser, or a newer format).
         return { ok: false };
       }
-      const code = await exportCode(progress);
-      const put = await request("me/save", { token: me.token, method: "PUT", body: JSON.stringify({ code, level: progress.level }) });
-      if (put.status === 401) { setAccount(null); return { ok: false, signedOut: true }; }
-      if (!put.ok) return { ok: false };
-      progress.cloud = { lastAt: Date.now(), lastLevel: progress.level };
-      saveProgress(progress);
-      return { ok: true, pulled };
-    } catch {
+    } else if (res.status !== 204) {
       return { ok: false };
     }
-  })().finally(() => { inFlight = null; });
-  return inFlight;
+    const sentLevel = progress.level;
+    const code = await exportCode(progress);
+    const put = await request("me/save", { token: me.token, method: "PUT", body: JSON.stringify({ code, level: sentLevel }) });
+    if (put.status === 401) { setAccount(null); return { ok: false, signedOut: true }; }
+    if (!put.ok) return { ok: false };
+    progress.cloud = { lastAt: Date.now(), lastLevel: sentLevel };
+    saveProgress(progress);
+    return { ok: true, pulled };
+  } catch {
+    return { ok: false };
+  }
 }
 
 // --- Sign in with Google -------------------------------------------------------------

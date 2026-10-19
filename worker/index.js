@@ -95,6 +95,12 @@ async function handleApi(request, env, url) {
         || !Number.isInteger(data.level) || data.level < 1) {
       return json({ error: "not a backup" }, 400, cors);
     }
+    // Phones merge before they upload, so a save is never further behind than what's
+    // stored; if one is, something's wrong — keep the stored copy.
+    const stored = JSON.parse((await env.SAVES.get(saveKey)) || "null");
+    if (stored && Number.isInteger(stored.level) && data.level < stored.level) {
+      return json({ error: "behind the saved copy", level: stored.level }, 409, cors);
+    }
     const savedAt = Date.now();
     await env.SAVES.put(saveKey, JSON.stringify({ code: data.code, level: data.level, savedAt }));
     return json({ ok: true, savedAt }, 200, cors);
@@ -115,8 +121,7 @@ async function signIn(request, env, cors) {
   }
   const claims = await verifyGoogleToken(String(credential || ""), env.GOOGLE_CLIENT_ID).catch(() => null);
   if (!claims) return json({ error: "sign-in failed" }, 401, cors);
-  const allowed = String(env.ALLOWED_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (allowed.length && !allowed.includes(String(claims.email).toLowerCase())) {
+  if (!emailAllowed(env, claims.email)) {
     return json({ error: "this Google account isn't on the list" }, 403, cors);
   }
   const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
@@ -125,8 +130,14 @@ async function signIn(request, env, cors) {
   return json({ token, email: claims.email, name: session.name }, 200, cors);
 }
 
+function emailAllowed(env, email) {
+  const allowed = String(env.ALLOWED_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  return !allowed.length || allowed.includes(String(email).toLowerCase());
+}
+
 // The session behind `Authorization: Bearer <token>`, renewed now and then so a
-// phone that keeps playing never gets signed out.
+// phone that keeps playing never gets signed out. Taking an account off
+// ALLOWED_EMAILS signs its phones out on their next request.
 async function sessionFor(request, env) {
   const m = (request.headers.get("Authorization") || "").match(/^Bearer ([0-9a-f]{64})$/);
   if (!m) return null;
@@ -134,6 +145,10 @@ async function sessionFor(request, env) {
   const raw = await env.SAVES.get(key);
   if (!raw) return null;
   const session = JSON.parse(raw);
+  if (!emailAllowed(env, session.email)) {
+    await env.SAVES.delete(key);
+    return null;
+  }
   if (Date.now() - (session.renewedAt || 0) > RENEW_AFTER) {
     session.renewedAt = Date.now();
     await env.SAVES.put(key, JSON.stringify(session), { expirationTtl: SESSION_TTL });
@@ -160,7 +175,7 @@ export async function verifyGoogleToken(jwt, clientId, now = Date.now()) {
   if (!GOOGLE_ISSUERS.includes(claims.iss)) throw new Error("wrong issuer");
   if (claims.aud !== clientId) throw new Error("wrong audience");
   if (!(claims.exp * 1000 > now)) throw new Error("expired");
-  if (!claims.sub || !claims.email || claims.email_verified === false) throw new Error("no verified email");
+  if (!claims.sub || !claims.email || claims.email_verified !== true) throw new Error("no verified email");
   return claims;
 }
 

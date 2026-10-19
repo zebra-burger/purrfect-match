@@ -21,12 +21,17 @@ dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 git -C "$repo" archive HEAD | tar -x -C "$dir"
 
-echo "Testing $(git -C "$repo" rev-parse --short HEAD)…"
+rev=$(git -C "$repo" rev-parse --short HEAD)
+echo "Testing $rev…"
 (cd "$dir" && node --test tests/*.test.mjs > "$dir/test.log" 2>&1) || {
   tail -30 "$dir/test.log" >&2
   echo "Tests failed — not deploying." >&2
   exit 1
 }
+
+# Every release gets its own offline cache, so phones always pick it up.
+sed -i '' "s/^const CACHE_VERSION = \"[^\"]*\";/const CACHE_VERSION = \"purrfect-$rev\";/" "$dir/sw.js"
+grep -q "purrfect-$rev" "$dir/sw.js" || { echo "Couldn't stamp the cache version — not deploying." >&2; exit 1; }
 
 cd "$dir/worker"
 npx --yes wrangler@4.125.0 deploy

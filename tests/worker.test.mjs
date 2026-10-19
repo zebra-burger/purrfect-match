@@ -111,10 +111,27 @@ test("forged, expired or wrong-app Google tokens are refused", async () => {
   assert.equal(e.store.size, 0);
 });
 
-test("ALLOWED_EMAILS limits who can back up", async () => {
+test("ALLOWED_EMAILS limits who can back up, and removing someone signs them out", async () => {
   const e = env({ ALLOWED_EMAILS: "Wifey@example.com, gary@example.com" });
-  assert.equal((await signIn(e)).res.status, 200, "case-insensitive match");
+  const { res, data } = await signIn(e);
+  assert.equal(res.status, 200, "case-insensitive match");
   assert.equal((await signIn(e, { sub: "2", email: "stranger@example.com" })).res.status, 403);
+  e.ALLOWED_EMAILS = "gary@example.com";
+  assert.equal((await call(e, "GET", "/v1/me/save", { token: data.token })).status, 401);
+});
+
+test("a token without a verified-email claim is refused", async () => {
+  await assert.rejects(verifyGoogleToken(await googleToken({ email_verified: undefined }), CLIENT_ID));
+});
+
+test("an upload behind the saved level is refused", async () => {
+  const e = env();
+  const { data } = await signIn(e);
+  const put = (level) => call(e, "PUT", "/v1/me/save", { token: data.token, body: JSON.stringify({ code: "zabc", level }) });
+  assert.equal((await put(40)).status, 200);
+  assert.equal((await put(12)).status, 409);
+  assert.equal((await put(41)).status, 200);
+  assert.equal(JSON.parse(e.store.get("user:1234567890")).level, 41);
 });
 
 test("rejects bad bodies and oversized saves", async () => {

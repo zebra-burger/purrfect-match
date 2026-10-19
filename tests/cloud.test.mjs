@@ -50,18 +50,51 @@ test("signed in: first sync uploads; a later sync pulls progress made elsewhere"
   assert.equal(phone.level, 40);
 });
 
-test("a damaged cloud copy is replaced, and an older one never lowers progress", async () => {
+test("an unreadable cloud copy is replaced only when it isn't further along", async () => {
   mem.clear(); signIn();
-  const cloud = fakeCloud(JSON.stringify({ code: "zNOTREALLYABACKUP", level: 999999 }));
+  const ahead = fakeCloud(JSON.stringify({ code: "zNOTREALLYABACKUP", level: 900 }));
   const phone = loadProgress();
   phone.level = 25;
-  assert.equal((await syncNow(phone)).ok, true);
+  assert.equal((await syncNow(phone)).ok, false, "left alone: it may be her real progress");
+  assert.equal(ahead.puts, 0);
   assert.equal(phone.level, 25);
-  assert.equal(JSON.parse(cloud.body).level, 25);
+
+  const behind = fakeCloud(JSON.stringify({ code: "zNOTREALLYABACKUP", level: 3 }));
+  assert.equal((await syncNow(phone)).ok, true);
+  assert.equal(JSON.parse(behind.body).level, 25, "a damaged older copy is replaced");
+});
+
+test("an older cloud copy never lowers progress", async () => {
+  mem.clear(); signIn();
+  const cloud = fakeCloud();
+  const phone = loadProgress();
+  phone.level = 25;
   const old = loadProgress(); old.level = 3;
   cloud.body = JSON.stringify({ code: await exportCode(old), level: 3 });
   await syncNow(phone);
   assert.equal(phone.level, 25);
+});
+
+test("a level that ends mid-sync gets its own sync, and 'backed up' reports what was sent", async () => {
+  mem.clear(); signIn();
+  const sent = [];
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  globalThis.fetch = async (url, init = {}) => {
+    if (init.method === "PUT") { sent.push(JSON.parse(init.body).level); return new Response("{}", { status: 200 }); }
+    await gate; // the first pull is slow
+    return new Response(null, { status: 204 });
+  };
+  const phone = loadProgress();
+  phone.level = 5;
+  const first = syncNow(phone);
+  phone.level = 6;            // she finishes a level while that sync is still running
+  const second = syncNow(phone);
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(sent, [6, 6].slice(0, sent.length));
+  assert.equal(sent.at(-1), 6, "level 6 reached the cloud");
+  assert.equal(phone.cloud.lastLevel, 6);
 });
 
 test("an expired session signs the phone out quietly", async () => {

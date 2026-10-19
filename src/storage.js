@@ -55,15 +55,29 @@ function fresh() {
 }
 
 // Accepts anything that looks like a save (v1, v2, or partial) and returns a clean v2.
+// Saves can arrive from old backup links, so every field is checked, not trusted.
+const MAX_LEVEL = 10_000_000;
+const MAX_COUNT = 1e12;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const nat = (n, max = MAX_COUNT) => (Number.isSafeInteger(n) && n >= 0 && n <= max ? n : null);
+const DATE_STATS = new Set(["lastDay", "firstDay"]);
+
 function normalize(raw) {
   const p = fresh();
   if (!raw || typeof raw !== "object") return p;
-  if (Number.isInteger(raw.level) && raw.level >= 1) p.level = raw.level;
-  if (typeof raw.stars === "string" && /^[0-3]*$/.test(raw.stars)) p.stars = raw.stars;
+  if (nat(raw.level, MAX_LEVEL) >= 1) p.level = raw.level;
+  if (typeof raw.stars === "string" && /^[0-3]*$/.test(raw.stars)) p.stars = raw.stars.slice(0, p.level);
   if (raw.stats && typeof raw.stats === "object") {
-    for (const k of Object.keys(p.stats)) if (raw.stats[k] != null) p.stats[k] = raw.stats[k];
+    for (const k of Object.keys(p.stats)) {
+      const v = raw.stats[k];
+      if (DATE_STATS.has(k)) { if (v === null || (typeof v === "string" && DATE_RE.test(v))) p.stats[k] = v; }
+      else if (nat(v) !== null) p.stats[k] = v;
+    }
   }
-  if (raw.backup && typeof raw.backup === "object") Object.assign(p.backup, raw.backup);
+  if (raw.backup && typeof raw.backup === "object") {
+    if (nat(raw.backup.lastLevel, MAX_LEVEL)) p.backup.lastLevel = raw.backup.lastLevel;
+    if (nat(raw.backup.lastAt)) p.backup.lastAt = raw.backup.lastAt;
+  }
   if (raw.boosters && typeof raw.boosters === "object") {
     for (const k of BOOSTERS) {
       const v = raw.boosters[k];
@@ -72,7 +86,7 @@ function normalize(raw) {
   }
   // The log: older saves have none, so their stash counts as earned. If the count and
   // the log ever disagree, the count wins and the log is squared up to match it.
-  const count = (n) => (Number.isInteger(n) && n >= 0 ? n : null);
+  const count = (n) => nat(n, 1e9);
   const log = raw.boosterLog && typeof raw.boosterLog === "object" ? raw.boosterLog : null;
   for (const k of BOOSTERS) {
     let earned = count(log?.earned?.[k]) ?? p.boosters[k];
@@ -82,7 +96,10 @@ function normalize(raw) {
     p.boosterLog.earned[k] = earned;
     p.boosterLog.spent[k] = spent;
   }
-  if (raw.cloud && typeof raw.cloud === "object") Object.assign(p.cloud, raw.cloud);
+  if (raw.cloud && typeof raw.cloud === "object") {
+    if (nat(raw.cloud.lastAt)) p.cloud.lastAt = raw.cloud.lastAt;
+    if (nat(raw.cloud.lastLevel, MAX_LEVEL) !== null) p.cloud.lastLevel = raw.cloud.lastLevel;
+  }
   if (Number.isFinite(raw.updatedAt)) p.updatedAt = raw.updatedAt;
   return p;
 }
@@ -158,6 +175,9 @@ export function recordResult(progress, { level, won, score, movesLeft, moves, ca
   if (!won) return { stars: 0, newBest: false, firstWin: false, improved: false, earned: [] };
 
   const stars = starsForResult(movesLeft, moves);
+  // A level beyond where she is (a ?level=N test jump) counts for nothing: no unlock,
+  // no stars, no boosters — so testing on her phone never skips her ahead.
+  if (level > progress.level) return { stars, newBest: false, firstWin: false, improved: false, earned: [] };
   const before = starsFor(progress, level);
   const firstWin = before === 0;
   const earned = [];
@@ -245,7 +265,12 @@ export function mergeProgress(a, b) {
     const x = a.stats[k], y = b.stats[k];
     if (typeof x === "number" && typeof y === "number") out.stats[k] = Math.max(x, y);
   }
-  if (b.stats.firstDay && (!a.stats.firstDay || b.stats.firstDay < a.stats.firstDay)) out.stats.firstDay = b.stats.firstDay;
+  const na = normalize(a).stats, nbs = normalize(b).stats;
+  if (nbs.firstDay && (!na.firstDay || nbs.firstDay < na.firstDay)) out.stats.firstDay = nbs.firstDay;
+  // The day streak belongs to whichever copy played most recently.
+  const later = (nbs.lastDay || "") > (na.lastDay || "") ? nbs : na;
+  out.stats.lastDay = later.lastDay;
+  out.stats.dayStreak = later.dayStreak;
   out.backup.lastLevel = Math.max(a.backup.lastLevel || 1, b.backup.lastLevel || 1);
   out.backup.lastAt = Math.max(a.backup.lastAt || 0, b.backup.lastAt || 0) || null;
   // Boosters: the most ever earned minus the most ever spent, per kind — so a booster

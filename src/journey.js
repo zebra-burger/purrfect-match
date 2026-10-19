@@ -233,7 +233,7 @@ export function createJourney({ progress, onPlay, catSvg }) {
     const next = [...MILESTONES].find((m) => m >= progress.level);
     openSheet(`
       <h2>${PLAYER}'s Journey</h2>
-      <ul class="j-stats">${rows.map(([i, k, v]) => `<li><span>${i} ${k}</span><b>${v}</b></li>`).join("")}</ul>
+      <ul class="j-stats">${rows.map(([i, k, v]) => `<li><span>${i} ${k}</span><b>${escapeHtml(v)}</b></li>`).join("")}</ul>
       ${next ? `<p class="j-next">Next milestone: <b>level ${fmt(next)}</b>${next === CANDY_LEVEL ? " — your Candy Crush level 🍬" : ""}, ${fmt(next - progress.level + 1)} to go</p>` : ""}`);
   }
 

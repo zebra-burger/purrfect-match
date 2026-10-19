@@ -1,12 +1,13 @@
 // Service worker: caches the whole game for offline play.
-// Bump CACHE_VERSION on every release so installed phones pick up updates.
+// CACHE_VERSION names the cache; a new name makes installed phones fetch everything
+// fresh. worker/deploy.sh stamps it with the commit being published, so every release
+// rolls out even if nobody bumps it by hand.
 const CACHE_VERSION = "purrfect-v0.9.2";
 
 // Everything the game needs to boot and play with no network. Levels are generated
 // on the phone, so there is no level data to fetch — once this is cached, it's endless offline.
 const ASSETS = [
   "./",
-  "index.html",
   "manifest.webmanifest",
   "styles/main.css",
   "styles/juice.css",
@@ -54,14 +55,20 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || new URL(request.url).origin !== location.origin) return;
 
   if (request.mode === "navigate") {
+    // Only a good copy of the game's own page refreshes the offline copy — never the
+    // privacy page, a 404, or a redirect (browsers won't show those for a navigation).
+    const home = new URL(self.registration.scope).pathname;
+    const isHome = new URL(request.url).pathname === home;
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put("index.html", copy));
+          if (isHome && res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put("./", copy));
+          }
           return res;
         })
-        .catch(() => caches.match("index.html"))
+        .catch(() => caches.match("./"))
     );
     return;
   }
